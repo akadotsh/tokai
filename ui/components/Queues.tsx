@@ -1,7 +1,10 @@
+import type { JobCounts } from "../../server/index";
+
 type QueuesProps = {
-  queues: string[];
+  queues: JobCounts[];
   message: string;
   onRefresh: () => void;
+  onQueueSelect: (queueName: string) => void;
 };
 
 function getMessageColor(message: string) {
@@ -16,7 +19,12 @@ function getMessageColor(message: string) {
   return "#FB7185";
 }
 
-export function Queues({ queues, message, onRefresh }: QueuesProps) {
+export function Queues({
+  queues,
+  message,
+  onRefresh,
+  onQueueSelect,
+}: QueuesProps) {
   return (
     <box flexGrow={1} padding={2} flexDirection="column" gap={1}>
       <box flexDirection="row" alignItems="center" gap={2}>
@@ -33,19 +41,41 @@ export function Queues({ queues, message, onRefresh }: QueuesProps) {
         </box>
       </box>
 
-      <box width={64} maxWidth="100%" flexDirection="column" gap={1}>
-        {queues.map((queueName) => (
+      <box width="100%" flexDirection="column" gap={1}>
+        {queues.map(({ name, counts }) => (
           <box
-            key={queueName}
+            key={name}
             width="100%"
-            height={3}
+            height={5}
             border
             borderColor="#253552"
             paddingLeft={1}
             paddingRight={1}
             alignItems="center"
+            flexDirection="row"
+            onMouseDown={() => onQueueSelect(name)}
           >
-            <text fg="#F3F6FF">{queueName}</text>
+            <text width={20} fg="#F3F6FF">
+              {name}
+            </text>
+            <box flexGrow={1} flexDirection="column">
+              <box flexDirection="row" gap={2}>
+                <text fg="#4ADE80">completed {counts.completed}</text>
+                <text fg="#FB7185">failed {counts.failed}</text>
+                <text fg="#FACC15">delayed {counts.delayed}</text>
+                <text fg="#60A5FA">active {counts.active}</text>
+                <text fg="#C7D2E9">wait {counts.wait}</text>
+              </box>
+              <box flexDirection="row" gap={2}>
+                <text fg="#A78BFA">
+                  waiting-children {counts["waiting-children"]}
+                </text>
+                <text fg="#F472B6">prioritized {counts.prioritized}</text>
+                <text fg="#94A3B8">paused {counts.paused}</text>
+                <text fg="#2DD4BF">repeat {counts.repeat}</text>
+              </box>
+            </box>
+            <text fg="#8EA2C9">→</text>
           </box>
         ))}
       </box>

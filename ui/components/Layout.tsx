@@ -1,18 +1,32 @@
+import type { JobCounts, QueueJobSummary } from "../../server/index";
 import { Header } from "./Header";
+import { Jobs } from "./Jobs";
 import { Queues } from "./Queues";
 
 type LayoutProps = {
-  queues: string[];
+  queues: JobCounts[];
   message: string;
+  selectedQueue: string | null;
+  jobs: QueueJobSummary[];
+  jobsMessage: string;
+  isLoadingJobs: boolean;
   onDisconnect: () => void;
   onRefresh: () => void;
+  onQueueSelect: (queueName: string) => void;
+  onBackToQueues: () => void;
 };
 
 export function Layout({
   queues,
   message,
+  selectedQueue,
+  jobs,
+  jobsMessage,
+  isLoadingJobs,
   onDisconnect,
   onRefresh,
+  onQueueSelect,
+  onBackToQueues,
 }: LayoutProps) {
   return (
     <box
@@ -22,7 +36,22 @@ export function Layout({
       flexDirection="column"
     >
       <Header onDisconnect={onDisconnect} />
-      <Queues queues={queues} message={message} onRefresh={onRefresh} />
+      {selectedQueue ? (
+        <Jobs
+          queueName={selectedQueue}
+          jobs={jobs}
+          isLoading={isLoadingJobs}
+          message={jobsMessage}
+          onBack={onBackToQueues}
+        />
+      ) : (
+        <Queues
+          queues={queues}
+          message={message}
+          onRefresh={onRefresh}
+          onQueueSelect={onQueueSelect}
+        />
+      )}
     </box>
   );
 }

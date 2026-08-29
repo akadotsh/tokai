@@ -1,23 +1,31 @@
 import { useState } from "react";
-import { redisConnection } from "../server/index";
+import {
+  redisConnection,
+  type JobCounts,
+  type QueueJobSummary,
+} from "../server/index";
 import { ConnectionForm } from "./components/ConnectionForm";
 import { Layout } from "./components/Layout";
 
 export function App() {
   const [redisUrl, setRedisUrl] = useState("");
-  const [queues, setQueues] = useState<string[]>([]);
+  const [queues, setQueues] = useState<JobCounts[]>([]);
+  const [selectedQueue, setSelectedQueue] = useState<string | null>(null);
+  const [jobs, setJobs] = useState<QueueJobSummary[]>([]);
+  const [jobsMessage, setJobsMessage] = useState("");
+  const [isLoadingJobs, setIsLoadingJobs] = useState(false);
   const [message, setMessage] = useState("");
   const [isConnected, setIsConnected] = useState(redisConnection.isConnected);
 
   const fetchQueues = async () => {
     try {
       setMessage("Scanning for BullMQ queues...");
-      const queueNames = await redisConnection.getQueues();
-      setQueues(queueNames);
+      const jobCounts = await redisConnection.getQueues();
+      setQueues(jobCounts);
       setMessage(
-        queueNames.length === 0
+        jobCounts.length === 0
           ? "No BullMQ queues found."
-          : `Found ${queueNames.length} BullMQ queue${queueNames.length === 1 ? "" : "s"}.`,
+          : `Found ${jobCounts.length} BullMQ queue${jobCounts.length === 1 ? "" : "s"}.`,
       );
     } catch (error) {
       const reason = error instanceof Error ? error.message : "Unknown error";
@@ -55,6 +63,10 @@ export function App() {
       await redisConnection.disconnect();
       setRedisUrl("");
       setQueues([]);
+      setSelectedQueue(null);
+      setJobs([]);
+      setJobsMessage("");
+      setIsLoadingJobs(false);
       setMessage("");
       setIsConnected(false);
     } catch (error) {
@@ -63,13 +75,43 @@ export function App() {
     }
   };
 
+  const fetchJobs = async (queueName: string) => {
+    setSelectedQueue(queueName);
+    setJobs([]);
+    setJobsMessage("");
+    setIsLoadingJobs(true);
+
+    try {
+      const queueJobs = await redisConnection.getQueueJobs(queueName);
+      setJobs(queueJobs);
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : "Unknown error";
+      setJobsMessage(`Could not fetch jobs: ${reason}`);
+    } finally {
+      setIsLoadingJobs(false);
+    }
+  };
+
+  const showQueues = () => {
+    setSelectedQueue(null);
+    setJobs([]);
+    setJobsMessage("");
+    setIsLoadingJobs(false);
+  };
+
   if (isConnected) {
     return (
       <Layout
         queues={queues}
         message={message}
+        selectedQueue={selectedQueue}
+        jobs={jobs}
+        jobsMessage={jobsMessage}
+        isLoadingJobs={isLoadingJobs}
         onDisconnect={disconnect}
         onRefresh={fetchQueues}
+        onQueueSelect={fetchJobs}
+        onBackToQueues={showQueues}
       />
     );
   }

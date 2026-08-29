@@ -20,7 +20,7 @@ export function Header({ onDisconnect }: HeaderProps) {
       <box
         width={20}
         height={3}
-        backgroundColor="#2563EB"
+        backgroundColor="#DC2626"
         flexShrink={0}
         alignItems="center"
         justifyContent="center"
