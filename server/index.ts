@@ -21,6 +21,7 @@ class RedisConnection {
     await this.connection?.disconnect();
     this.connection = null;
     this.isConnected = false;
+    console.log("Disconnected");
   }
 }
 

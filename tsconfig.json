@@ -10,5 +10,5 @@
     "skipLibCheck": true,
     "noEmit": true
   },
-  "include": ["index.tsx"]
+  "include": ["ui/index.tsx"]
 }
