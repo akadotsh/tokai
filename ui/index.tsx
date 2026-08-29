@@ -9,8 +9,25 @@ import { redisConnection } from "../server/index";
 
 function App() {
   const [redisUrl, setRedisUrl] = useState("");
+  const [queues, setQueues] = useState<string[]>([]);
   const [message, setMessage] = useState("");
   const [isConnected, setIsConnected] = useState(redisConnection.isConnected);
+
+  const fetchQueues = async () => {
+    try {
+      setMessage("Scanning for queues...");
+      const queueNames = await redisConnection.getQueues();
+      setQueues(queueNames);
+      setMessage(
+        queueNames.length === 0
+          ? "No BullMQ queues found."
+          : `Found ${queueNames.length} BullMQ queue${queueNames.length === 1 ? "" : "s"}.`,
+      );
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : "Unknown error";
+      setMessage(`Could not scan for queues: ${reason}`);
+    }
+  };
 
   const submitRedisUrl = async (value: string) => {
     const url = value.trim();
@@ -31,7 +48,7 @@ function App() {
       setMessage("Connecting to Redis...");
       await redisConnection.connect(url);
       setIsConnected(true);
-      setMessage("Connected to Redis.");
+      await fetchQueues();
     } catch (error) {
       const reason = error instanceof Error ? error.message : "Unknown error";
       setMessage(`Could not connect to Redis: ${reason}`);
@@ -42,6 +59,7 @@ function App() {
     try {
       await redisConnection.disconnect();
       setRedisUrl("");
+      setQueues([]);
       setMessage("");
       setIsConnected(false);
     } catch (error) {
@@ -89,10 +107,52 @@ function App() {
         </box>
 
         <box flexGrow={1} padding={2} flexDirection="column" gap={1}>
-          <text fg="#4ADE80">Connected to Redis</text>
-          <text fg="#8290AA">{redisUrl}</text>
-          {message.startsWith("Could not disconnect") ? (
-            <text fg="#FB7185">{message}</text>
+          <box width={64} maxWidth="100%" flexDirection="column" gap={1}>
+            <box flexDirection="row" alignItems="center" gap={2}>
+              <box
+                width={12}
+                height={3}
+                backgroundColor="#253552"
+                alignItems="center"
+                justifyContent="center"
+                onMouseDown={fetchQueues}
+              >
+                <text fg="#FFFFFF">Refresh {queues.length}</text>
+              </box>
+            </box>
+
+            {queues.map((queueName) => (
+              <box
+                key={queueName}
+                width="100%"
+                height={3}
+                border
+                borderColor="#253552"
+                paddingLeft={1}
+                paddingRight={1}
+                alignItems="center"
+                onMouseDown={() => {}}
+              >
+                <text fg="#F3F6FF">{queueName}</text>
+              </box>
+            ))}
+          </box>
+
+          {message ? (
+            <text
+              fg={
+                message.startsWith("Metadata for")
+                  ? "#4ADE80"
+                  : message.startsWith("Found ")
+                    ? "#4ADE80"
+                    : message === "Querying queue metadata..." ||
+                        message === "Scanning for BullMQ queues..."
+                      ? "#FACC15"
+                      : "#FB7185"
+              }
+            >
+              {message}
+            </text>
           ) : null}
         </box>
       </box>

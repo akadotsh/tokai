@@ -1,5 +1,5 @@
 import { RedisClient } from "bun";
-import { IRedisClient, createBunRedisClient } from "bullmq";
+import { IRedisClient, Queue, createBunRedisClient } from "bullmq";
 
 class RedisConnection {
   isConnected: boolean = false;
@@ -22,6 +22,37 @@ class RedisConnection {
     this.connection = null;
     this.isConnected = false;
     console.log("Disconnected");
+  }
+
+  async getQueues() {
+    if (!this.connection) {
+      throw new Error("Connect to Redis before scanning for queues.");
+    }
+
+    const queues = new Set<string>();
+    let cursor = "0";
+
+    do {
+      const [nextCursor, keys] = await this.connection.scan(cursor, {
+        MATCH: "bull:*:meta",
+        COUNT: 100,
+      });
+
+      cursor = nextCursor;
+
+      for (const key of keys) {
+        const match = key.match(/^bull:(.+):meta$/);
+
+        if (match?.[1]) {
+          queues.add(match[1]);
+        }
+      }
+    } while (cursor !== "0");
+
+    const queueNames = [...queues].sort();
+    console.log("BullMQ queues:", queueNames);
+
+    return queueNames;
   }
 }
 
