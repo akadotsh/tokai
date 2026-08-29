@@ -14,6 +14,7 @@ export function App() {
   const [jobs, setJobs] = useState<QueueJobSummary[]>([]);
   const [jobsMessage, setJobsMessage] = useState("");
   const [isLoadingJobs, setIsLoadingJobs] = useState(false);
+  const [deletingJobId, setDeletingJobId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [isConnected, setIsConnected] = useState(redisConnection.isConnected);
 
@@ -67,6 +68,7 @@ export function App() {
       setJobs([]);
       setJobsMessage("");
       setIsLoadingJobs(false);
+      setDeletingJobId(null);
       setMessage("");
       setIsConnected(false);
     } catch (error) {
@@ -97,6 +99,30 @@ export function App() {
     setJobs([]);
     setJobsMessage("");
     setIsLoadingJobs(false);
+    setDeletingJobId(null);
+    void fetchQueues();
+  };
+
+  const deleteJob = async (jobId: string) => {
+    if (!selectedQueue || deletingJobId) {
+      return;
+    }
+
+    setDeletingJobId(jobId);
+    setJobsMessage("");
+
+    try {
+      await redisConnection.removeQueueJob(selectedQueue, jobId);
+      setJobs((currentJobs) =>
+        currentJobs.filter((job) => job.id !== jobId),
+      );
+      setJobsMessage(`Deleted job "${jobId}".`);
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : "Unknown error";
+      setJobsMessage(`Could not delete job: ${reason}`);
+    } finally {
+      setDeletingJobId(null);
+    }
   };
 
   if (isConnected) {
@@ -108,10 +134,12 @@ export function App() {
         jobs={jobs}
         jobsMessage={jobsMessage}
         isLoadingJobs={isLoadingJobs}
+        deletingJobId={deletingJobId}
         onDisconnect={disconnect}
         onRefresh={fetchQueues}
         onQueueSelect={fetchJobs}
         onBackToQueues={showQueues}
+        onDeleteJob={deleteJob}
       />
     );
   }

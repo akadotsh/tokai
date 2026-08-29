@@ -166,6 +166,27 @@ class RedisConnection {
       await queue.close();
     }
   }
+
+  async removeQueueJob(queueName: string, jobId: string) {
+    if (!this.connection) {
+      throw new Error("Connect to Redis before deleting a job.");
+    }
+
+    const queue = new Queue(queueName, {
+      connection: this.connection.duplicate(),
+      skipMetasUpdate: true,
+    });
+
+    try {
+      const removed = await queue.remove(jobId);
+
+      if (removed === 0) {
+        throw new Error(`Job "${jobId}" was not found or is currently locked.`);
+      }
+    } finally {
+      await queue.close();
+    }
+  }
 }
 
 export const redisConnection = new RedisConnection();

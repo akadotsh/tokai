@@ -1,15 +1,14 @@
 import { SyntaxStyle } from "@opentui/core";
-import type {
-  QueueJobStatus,
-  QueueJobSummary,
-} from "../../server/index";
+import type { QueueJobStatus, QueueJobSummary } from "../../server/index";
 
 type JobsProps = {
   queueName: string;
   jobs: QueueJobSummary[];
   isLoading: boolean;
   message: string;
+  deletingJobId: string | null;
   onBack: () => void;
+  onDelete: (jobId: string) => void;
 };
 
 const statusColors: Record<QueueJobStatus, string> = {
@@ -43,10 +42,22 @@ export function Jobs({
   jobs,
   isLoading,
   message,
+  deletingJobId,
   onBack,
+  onDelete,
 }: JobsProps) {
   return (
-    <box flexGrow={1} padding={2} flexDirection="column" gap={1}>
+    <box
+      width="100%"
+      height="100%"
+      minHeight={0}
+      flexGrow={1}
+      flexShrink={1}
+      overflow="hidden"
+      padding={2}
+      flexDirection="column"
+      gap={1}
+    >
       <box flexDirection="row" alignItems="center" gap={2}>
         <box
           width={10}
@@ -70,54 +81,84 @@ export function Jobs({
       ) : jobs.length === 0 ? (
         <text fg="#8290AA">No jobs found in the first 100 per status.</text>
       ) : (
-        <scrollbox width="100%" flexGrow={1} focused scrollY>
-          <box width="100%" flexDirection="column" gap={1}>
-            {jobs.map((job, index) => {
-              const json = formatJobData(job.data);
-              const jsonHeight = json.split("\n").length;
+        <scrollbox
+          width="80%"
+          height="100%"
+          minHeight={0}
+          flexGrow={1}
+          flexShrink={1}
+          alignSelf="center"
+          focused
+          scrollY
+          contentOptions={{ flexDirection: "column", gap: 1 }}
+        >
+          {jobs.map((job, index) => {
+            const json = formatJobData(job.data);
+            const jsonHeight = json.split("\n").length;
+            const isDeleting = deletingJobId === job.id;
 
-              return (
+            return (
+              <box
+                key={`${job.status}:${job.id}:${index}`}
+                width="100%"
+                height={jsonHeight + 6}
+                flexShrink={0}
+                border
+                borderColor="#253552"
+                paddingLeft={1}
+                paddingRight={1}
+                flexDirection="column"
+              >
                 <box
-                  key={`${job.status}:${job.id}:${index}`}
                   width="100%"
-                  height={jsonHeight + 4}
-                  border
-                  borderColor="#253552"
-                  paddingLeft={1}
-                  paddingRight={1}
-                  flexDirection="column"
+                  height={3}
+                  flexDirection="row"
+                  alignItems="center"
+                  justifyContent="space-between"
                 >
-                  <box
-                    width="100%"
-                    height={1}
-                    flexDirection="row"
-                    justifyContent="space-between"
-                  >
-                    <box flexDirection="row" gap={2}>
-                      <text fg="#8290AA">ID: {job.id}</text>
-                      <text fg="#F3F6FF">Name: {job.name}</text>
-                    </box>
+                  <box flexDirection="row" gap={2}>
+                    <text fg="#8290AA">ID: {job.id}</text>
+                    <text fg="#F3F6FF">Name: {job.name}</text>
+                  </box>
+                  <box flexDirection="row" alignItems="center" gap={2}>
                     <text fg={statusColors[job.status]}>
                       Status: {job.status}
                     </text>
+                    <box
+                      width={14}
+                      height={3}
+                      border
+                      borderColor="#DC2626"
+                      alignItems="center"
+                      justifyContent="center"
+                      onMouseDown={() => onDelete(job.id)}
+                    >
+                      <text fg="#FB7185">
+                        {isDeleting ? "Deleting..." : "Delete"}
+                      </text>
+                    </box>
                   </box>
-                  <code
-                    width="100%"
-                    height={jsonHeight}
-                    content={json}
-                    filetype="json"
-                    syntaxStyle={jsonSyntaxStyle}
-                    baseHighlight="default"
-                    drawUnstyledText
-                  />
                 </box>
-              );
-            })}
-          </box>
+                <code
+                  width="100%"
+                  height={jsonHeight}
+                  content={json}
+                  filetype="json"
+                  syntaxStyle={jsonSyntaxStyle}
+                  baseHighlight="default"
+                  drawUnstyledText
+                />
+              </box>
+            );
+          })}
         </scrollbox>
       )}
 
-      {!isLoading && message ? <text fg="#FB7185">{message}</text> : null}
+      {!isLoading && message ? (
+        <text fg={message.startsWith("Deleted ") ? "#4ADE80" : "#FB7185"}>
+          {message}
+        </text>
+      ) : null}
     </box>
   );
 }

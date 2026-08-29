@@ -10,10 +10,12 @@ type LayoutProps = {
   jobs: QueueJobSummary[];
   jobsMessage: string;
   isLoadingJobs: boolean;
+  deletingJobId: string | null;
   onDisconnect: () => void;
   onRefresh: () => void;
   onQueueSelect: (queueName: string) => void;
   onBackToQueues: () => void;
+  onDeleteJob: (jobId: string) => void;
 };
 
 export function Layout({
@@ -23,10 +25,12 @@ export function Layout({
   jobs,
   jobsMessage,
   isLoadingJobs,
+  deletingJobId,
   onDisconnect,
   onRefresh,
   onQueueSelect,
   onBackToQueues,
+  onDeleteJob,
 }: LayoutProps) {
   return (
     <box
@@ -42,7 +46,9 @@ export function Layout({
           jobs={jobs}
           isLoading={isLoadingJobs}
           message={jobsMessage}
+          deletingJobId={deletingJobId}
           onBack={onBackToQueues}
+          onDelete={onDeleteJob}
         />
       ) : (
         <Queues
