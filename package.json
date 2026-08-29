@@ -1,0 +1,27 @@
+{
+  "name": "tokai",
+  "version": "1.0.0",
+  "description": "",
+  "type": "module",
+  "main": "index.tsx",
+  "scripts": {
+    "start": "bun index.tsx",
+    "dev": "bun --watch index.tsx",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "bun@1.4.0",
+  "devDependencies": {
+    "@types/bun": "^1.4.0",
+    "@types/react": "^19.2.18",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@opentui/core": "^0.5.9",
+    "@opentui/react": "^0.5.9",
+    "bullmq": "^6.3.2",
+    "react": "^19.2.8"
+  }
+}
