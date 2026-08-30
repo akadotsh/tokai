@@ -1,6 +1,7 @@
 import {
   createContext,
   useContext,
+  useEffect,
   useReducer,
   type PropsWithChildren,
 } from "react";
@@ -29,6 +30,7 @@ type TokaiContextValue = {
 };
 
 const TokaiContext = createContext<TokaiContextValue | null>(null);
+const POLL_INTERVAL_MS = 5_000;
 
 export function TokaiProvider({ children }: PropsWithChildren) {
   const [state, dispatch] = useReducer(
@@ -44,7 +46,71 @@ export function TokaiProvider({ children }: PropsWithChildren) {
     newJobData,
     isAddingJob,
     isObliteratingQueue,
+    isConnected,
   } = state;
+
+  useEffect(() => {
+    if (
+      !isConnected ||
+      deletingJobId ||
+      isAddingJob ||
+      isObliteratingQueue
+    ) {
+      return;
+    }
+
+    let isActive = true;
+    let isPolling = false;
+
+    const poll = async () => {
+      if (isPolling) return;
+      isPolling = true;
+
+      try {
+        const queues = await redisConnection.getQueues();
+
+        if (!isActive) return;
+        dispatch({ type: "queuesRefreshed", queues });
+
+        if (selectedQueue) {
+          const queueStillExists = queues.some(
+            (queue) =>
+              queue.name === selectedQueue.name &&
+              queue.prefix === selectedQueue.prefix,
+          );
+
+          if (!queueStillExists) {
+            dispatch({ type: "selectedQueueMissing", queue: selectedQueue });
+            return;
+          }
+
+          const jobs = await redisConnection.getQueueJobs(selectedQueue);
+
+          if (isActive) {
+            dispatch({ type: "jobsRefreshed", queue: selectedQueue, jobs });
+          }
+        }
+      } catch {
+        // Keep the current screen stable when a background refresh fails.
+      } finally {
+        isPolling = false;
+      }
+    };
+
+    const interval = setInterval(() => void poll(), POLL_INTERVAL_MS);
+
+    return () => {
+      isActive = false;
+      clearInterval(interval);
+    };
+  }, [
+    deletingJobId,
+    isAddingJob,
+    isConnected,
+    isObliteratingQueue,
+    selectedQueue?.name,
+    selectedQueue?.prefix,
+  ]);
 
   const fetchQueues = async () => {
     try {

@@ -24,10 +24,13 @@ export type AppAction =
   | { type: "disconnected" }
   | { type: "queuesLoading" }
   | { type: "queuesLoaded"; queues: JobCounts[] }
+  | { type: "queuesRefreshed"; queues: JobCounts[] }
   | { type: "queuesFailed"; message: string }
   | { type: "jobsLoading"; queue: QueueRef }
   | { type: "jobsLoaded"; queue: QueueRef; jobs: QueueJobSummary[] }
+  | { type: "jobsRefreshed"; queue: QueueRef; jobs: QueueJobSummary[] }
   | { type: "jobsFailed"; queue: QueueRef; message: string }
+  | { type: "selectedQueueMissing"; queue: QueueRef }
   | { type: "showQueues" }
   | { type: "jobDeleteStarted"; jobId: string }
   | { type: "jobDeleted"; jobId: string }
@@ -87,6 +90,8 @@ export function reducer(state: AppState, action: AppAction): AppState {
             ? "No queues found."
             : `Found ${action.queues.length} Queue${action.queues.length === 1 ? "" : "s"}.`,
       };
+    case "queuesRefreshed":
+      return { ...state, queues: action.queues };
     case "queuesFailed":
       return { ...state, message: action.message };
     case "jobsLoading":
@@ -104,12 +109,28 @@ export function reducer(state: AppState, action: AppAction): AppState {
     case "jobsLoaded":
       if (!isSameQueue(state.selectedQueue, action.queue)) return state;
       return { ...state, jobs: action.jobs, isLoadingJobs: false };
+    case "jobsRefreshed":
+      if (!isSameQueue(state.selectedQueue, action.queue)) return state;
+      return { ...state, jobs: action.jobs };
     case "jobsFailed":
       if (!isSameQueue(state.selectedQueue, action.queue)) return state;
       return {
         ...state,
         jobsMessage: action.message,
         isLoadingJobs: false,
+      };
+    case "selectedQueueMissing":
+      if (!isSameQueue(state.selectedQueue, action.queue)) return state;
+      return {
+        ...state,
+        selectedQueue: null,
+        jobs: [],
+        jobsMessage: "",
+        isLoadingJobs: false,
+        isAddJobScreenOpen: false,
+        newJobName: "",
+        newJobData: "{}",
+        message: `Queue "${action.queue.name}" is no longer available.`,
       };
     case "showQueues":
       return {
