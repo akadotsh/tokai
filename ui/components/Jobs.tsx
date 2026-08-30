@@ -10,6 +10,7 @@ type JobsProps = {
   isObliterating: boolean;
   onBack: () => void;
   onDelete: (jobId: string) => void;
+  onOpenAddJob: () => void;
   onObliterate: () => void;
 };
 
@@ -48,6 +49,7 @@ export function Jobs({
   isObliterating,
   onBack,
   onDelete,
+  onOpenAddJob,
   onObliterate,
 }: JobsProps) {
   return (
@@ -83,17 +85,29 @@ export function Jobs({
             {queueName} · {jobs.length} jobs
           </text>
         </box>
-        <box
-          width={18}
-          height={3}
-          backgroundColor="#DC2626"
-          alignItems="center"
-          justifyContent="center"
-          onMouseDown={onObliterate}
-        >
-          <text fg="#FFFFFF">
-            {isObliterating ? "Obliterating..." : "Obliterate"}
-          </text>
+        <box flexDirection="row" alignItems="center" gap={1}>
+          <box
+            width={14}
+            height={3}
+            backgroundColor="#2563EB"
+            alignItems="center"
+            justifyContent="center"
+            onMouseDown={onOpenAddJob}
+          >
+            <text fg="#FFFFFF">Add Job</text>
+          </box>
+          <box
+            width={18}
+            height={3}
+            backgroundColor="#DC2626"
+            alignItems="center"
+            justifyContent="center"
+            onMouseDown={onObliterate}
+          >
+            <text fg="#FFFFFF">
+              {isObliterating ? "Obliterating..." : "Obliterate"}
+            </text>
+          </box>
         </box>
       </box>
 
@@ -178,7 +192,13 @@ export function Jobs({
       )}
 
       {!isLoading && message ? (
-        <text fg={message.startsWith("Deleted ") ? "#4ADE80" : "#FB7185"}>
+        <text
+          fg={
+            message.startsWith("Deleted ") || message.startsWith("Added ")
+              ? "#4ADE80"
+              : "#FB7185"
+          }
+        >
           {message}
         </text>
       ) : null}

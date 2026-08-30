@@ -18,6 +18,10 @@ export function App() {
     jobsMessage,
     isLoadingJobs,
     deletingJobId,
+    isAddJobScreenOpen,
+    newJobName,
+    newJobData,
+    isAddingJob,
     isObliteratingQueue,
     message,
     isConnected,
@@ -102,7 +106,12 @@ export function App() {
   };
 
   const deleteJob = async (jobId: string) => {
-    if (!selectedQueue || deletingJobId || isObliteratingQueue) {
+    if (
+      !selectedQueue ||
+      deletingJobId ||
+      isAddingJob ||
+      isObliteratingQueue
+    ) {
       return;
     }
 
@@ -121,8 +130,53 @@ export function App() {
     }
   };
 
+  const addJob = async () => {
+    if (
+      !selectedQueue ||
+      isAddingJob ||
+      deletingJobId ||
+      isObliteratingQueue
+    ) {
+      return;
+    }
+
+    const name = newJobName.trim();
+
+    if (!name) {
+      dispatch({ type: "jobAddFailed", message: "Enter a job name." });
+      return;
+    }
+
+    let data: unknown;
+
+    try {
+      data = JSON.parse(newJobData);
+    } catch {
+      dispatch({ type: "jobAddFailed", message: "Job data must be valid JSON." });
+      return;
+    }
+
+    dispatch({ type: "jobAddStarted" });
+
+    try {
+      const job = await redisConnection.addQueueJob(selectedQueue, name, data);
+      dispatch({ type: "jobAdded", job });
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : "Unknown error";
+      dispatch({
+        type: "jobAddFailed",
+        message: `Could not add job: ${reason}`,
+      });
+    }
+  };
+
   const obliterateQueue = async () => {
-    if (!selectedQueue || isObliteratingQueue || deletingJobId) {
+    if (
+      !selectedQueue ||
+      isObliteratingQueue ||
+      deletingJobId ||
+      isAddingJob
+    ) {
       return;
     }
 
@@ -151,12 +205,25 @@ export function App() {
         jobsMessage={jobsMessage}
         isLoadingJobs={isLoadingJobs}
         deletingJobId={deletingJobId}
+        isAddJobScreenOpen={isAddJobScreenOpen}
+        newJobName={newJobName}
+        newJobData={newJobData}
+        isAddingJob={isAddingJob}
         isObliteratingQueue={isObliteratingQueue}
         onDisconnect={disconnect}
         onRefresh={fetchQueues}
         onQueueSelect={fetchJobs}
         onBackToQueues={showQueues}
         onDeleteJob={deleteJob}
+        onOpenAddJob={() => dispatch({ type: "addJobScreenOpened" })}
+        onCloseAddJob={() => dispatch({ type: "addJobScreenClosed" })}
+        onNewJobNameChange={(value) =>
+          dispatch({ type: "newJobNameChanged", value })
+        }
+        onNewJobDataChange={(value) =>
+          dispatch({ type: "newJobDataChanged", value })
+        }
+        onAddJob={addJob}
         onObliterateQueue={obliterateQueue}
       />
     );

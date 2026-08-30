@@ -8,6 +8,10 @@ export type AppState = {
   jobsMessage: string;
   isLoadingJobs: boolean;
   deletingJobId: string | null;
+  isAddJobScreenOpen: boolean;
+  newJobName: string;
+  newJobData: string;
+  isAddingJob: boolean;
   isObliteratingQueue: boolean;
   message: string;
   isConnected: boolean;
@@ -28,6 +32,13 @@ export type AppAction =
   | { type: "jobDeleteStarted"; jobId: string }
   | { type: "jobDeleted"; jobId: string }
   | { type: "jobDeleteFailed"; jobId: string; message: string }
+  | { type: "addJobScreenOpened" }
+  | { type: "addJobScreenClosed" }
+  | { type: "newJobNameChanged"; value: string }
+  | { type: "newJobDataChanged"; value: string }
+  | { type: "jobAddStarted" }
+  | { type: "jobAdded"; job: QueueJobSummary }
+  | { type: "jobAddFailed"; message: string }
   | { type: "queueObliterateStarted" }
   | { type: "queueObliterated"; queueName: string }
   | { type: "queueObliterateFailed"; message: string };
@@ -41,6 +52,10 @@ export function createInitialState(isConnected: boolean): AppState {
     jobsMessage: "",
     isLoadingJobs: false,
     deletingJobId: null,
+    isAddJobScreenOpen: false,
+    newJobName: "",
+    newJobData: "{}",
+    isAddingJob: false,
     isObliteratingQueue: false,
     message: "",
     isConnected,
@@ -77,6 +92,10 @@ export function reducer(state: AppState, action: AppAction): AppState {
         jobs: [],
         jobsMessage: "",
         isLoadingJobs: true,
+        isAddJobScreenOpen: false,
+        newJobName: "",
+        newJobData: "{}",
+        isAddingJob: false,
       };
     case "jobsLoaded":
       if (state.selectedQueue !== action.queueName) return state;
@@ -96,6 +115,10 @@ export function reducer(state: AppState, action: AppAction): AppState {
         jobsMessage: "",
         isLoadingJobs: false,
         deletingJobId: null,
+        isAddJobScreenOpen: false,
+        newJobName: "",
+        newJobData: "{}",
+        isAddingJob: false,
         isObliteratingQueue: false,
       };
     case "jobDeleteStarted":
@@ -114,6 +137,41 @@ export function reducer(state: AppState, action: AppAction): AppState {
         deletingJobId: null,
         jobsMessage: action.message,
       };
+    case "addJobScreenOpened":
+      return {
+        ...state,
+        isAddJobScreenOpen: true,
+        newJobName: "",
+        newJobData: "{}",
+        jobsMessage: "",
+      };
+    case "addJobScreenClosed":
+      if (state.isAddingJob) return state;
+      return {
+        ...state,
+        isAddJobScreenOpen: false,
+        newJobName: "",
+        newJobData: "{}",
+        jobsMessage: "",
+      };
+    case "newJobNameChanged":
+      return { ...state, newJobName: action.value, jobsMessage: "" };
+    case "newJobDataChanged":
+      return { ...state, newJobData: action.value, jobsMessage: "" };
+    case "jobAddStarted":
+      return { ...state, isAddingJob: true, jobsMessage: "" };
+    case "jobAdded":
+      return {
+        ...state,
+        jobs: [action.job, ...state.jobs],
+        isAddJobScreenOpen: false,
+        newJobName: "",
+        newJobData: "{}",
+        isAddingJob: false,
+        jobsMessage: `Added job "${action.job.name}".`,
+      };
+    case "jobAddFailed":
+      return { ...state, isAddingJob: false, jobsMessage: action.message };
     case "queueObliterateStarted":
       return { ...state, isObliteratingQueue: true, jobsMessage: "" };
     case "queueObliterated":

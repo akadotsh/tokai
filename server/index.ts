@@ -188,6 +188,31 @@ class RedisConnection {
     }
   }
 
+  async addQueueJob(queueName: string, name: string, data: unknown) {
+    if (!this.connection) {
+      throw new Error("Connect to Redis before adding a job.");
+    }
+
+    const queue = new Queue(queueName, {
+      connection: this.connection.duplicate(),
+      skipMetasUpdate: true,
+    });
+
+    try {
+      const job = await queue.add(name, data);
+
+      return {
+        id: job.id ?? "(no id)",
+        name: job.name,
+        status: "wait",
+        timestamp: job.timestamp,
+        data: job.data,
+      } satisfies QueueJobSummary;
+    } finally {
+      await queue.close();
+    }
+  }
+
   async obliterateQueue(queueName: string) {
     if (!this.connection) {
       throw new Error("Connect to Redis before obliterating a queue.");
