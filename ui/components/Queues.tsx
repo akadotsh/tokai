@@ -1,11 +1,4 @@
-import type { JobCounts } from "../../server/index";
-
-type QueuesProps = {
-  queues: JobCounts[];
-  message: string;
-  onRefresh: () => void;
-  onQueueSelect: (queueName: string) => void;
-};
+import { useTokai } from "../provider";
 
 function getMessageColor(message: string) {
   if (
@@ -23,12 +16,11 @@ function getMessageColor(message: string) {
   return "#FB7185";
 }
 
-export function Queues({
-  queues,
-  message,
-  onRefresh,
-  onQueueSelect,
-}: QueuesProps) {
+export function Queues() {
+  const {
+    state: { queues, message },
+    actions: { fetchQueues, fetchJobs },
+  } = useTokai();
   const queueRows = Array.from(
     { length: Math.ceil(queues.length / 2) },
     (_, index) => queues.slice(index * 2, index * 2 + 2),
@@ -44,7 +36,7 @@ export function Queues({
           backgroundColor="#253552"
           alignItems="center"
           justifyContent="center"
-          onMouseDown={onRefresh}
+          onMouseDown={fetchQueues}
         >
           <text fg="#FFFFFF">Refresh</text>
         </box>
@@ -68,7 +60,7 @@ export function Queues({
                 paddingLeft={1}
                 paddingRight={1}
                 flexDirection="column"
-                onMouseDown={() => onQueueSelect(name)}
+                onMouseDown={() => fetchJobs(name)}
               >
                 <box
                   width="100%"

@@ -5,6 +5,7 @@ import {
 } from "@opentui/core";
 import { createRoot } from "@opentui/react";
 import { App } from "./App";
+import { TokaiProvider } from "./provider";
 
 const renderer = await createCliRenderer({
   exitOnCtrlC: true,
@@ -23,4 +24,8 @@ const main = new BoxRenderable(renderer, {
 });
 
 renderer.root.add(main);
-createRoot(renderer).render(<App />);
+createRoot(renderer).render(
+  <TokaiProvider>
+    <App />
+  </TokaiProvider>,
+);

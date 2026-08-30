@@ -1,8 +1,8 @@
-type HeaderProps = {
-  onDisconnect: () => void;
-};
+import { useTokai } from "../provider";
 
-export function Header({ onDisconnect }: HeaderProps) {
+export function Header() {
+  const { disconnect } = useTokai().actions;
+
   return (
     <box
       width="100%"
@@ -24,7 +24,7 @@ export function Header({ onDisconnect }: HeaderProps) {
         flexShrink={0}
         alignItems="center"
         justifyContent="center"
-        onMouseDown={onDisconnect}
+        onMouseDown={disconnect}
       >
         <text fg="#FFFFFF">Disconnect</text>
       </box>

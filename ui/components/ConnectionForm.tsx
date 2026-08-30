@@ -1,16 +1,11 @@
-type ConnectionFormProps = {
-  redisUrl: string;
-  message: string;
-  onRedisUrlChange: (value: string) => void;
-  onSubmit: () => void;
-};
+import { useTokai } from "../provider";
 
-export function ConnectionForm({
-  redisUrl,
-  message,
-  onRedisUrlChange,
-  onSubmit,
-}: ConnectionFormProps) {
+export function ConnectionForm() {
+  const {
+    state: { redisUrl, message },
+    actions: { setRedisUrl, connect },
+  } = useTokai();
+
   return (
     <box
       width="100%"
@@ -42,8 +37,8 @@ export function ConnectionForm({
             placeholderColor="#59677F"
             textColor="#F3F6FF"
             focused
-            onInput={onRedisUrlChange}
-            onSubmit={onSubmit}
+            onInput={setRedisUrl}
+            onSubmit={connect}
           />
         </box>
 
@@ -53,7 +48,7 @@ export function ConnectionForm({
           backgroundColor="#2563EB"
           alignItems="center"
           justifyContent="center"
-          onMouseDown={onSubmit}
+          onMouseDown={connect}
         >
           <text fg="#FFFFFF">Submit</text>
         </box>

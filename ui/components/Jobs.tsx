@@ -1,18 +1,6 @@
 import { SyntaxStyle } from "@opentui/core";
-import type { QueueJobStatus, QueueJobSummary } from "../../server/index";
-
-type JobsProps = {
-  queueName: string;
-  jobs: QueueJobSummary[];
-  isLoading: boolean;
-  message: string;
-  deletingJobId: string | null;
-  isObliterating: boolean;
-  onBack: () => void;
-  onDelete: (jobId: string) => void;
-  onOpenAddJob: () => void;
-  onObliterate: () => void;
-};
+import type { QueueJobStatus } from "../../server/index";
+import { useTokai } from "../provider";
 
 const statusColors: Record<QueueJobStatus, string> = {
   completed: "#4ADE80",
@@ -40,18 +28,21 @@ function formatJobData(data: unknown) {
   return JSON.stringify(data, null, 2) ?? "null";
 }
 
-export function Jobs({
-  queueName,
-  jobs,
-  isLoading,
-  message,
-  deletingJobId,
-  isObliterating,
-  onBack,
-  onDelete,
-  onOpenAddJob,
-  onObliterate,
-}: JobsProps) {
+export function Jobs() {
+  const {
+    state: {
+      selectedQueue,
+      jobs,
+      isLoadingJobs,
+      jobsMessage,
+      deletingJobId,
+      isObliteratingQueue,
+    },
+    actions: { showQueues, deleteJob, openAddJob, obliterateQueue },
+  } = useTokai();
+
+  if (!selectedQueue) return null;
+
   return (
     <box
       width="100%"
@@ -77,12 +68,12 @@ export function Jobs({
             backgroundColor="#253552"
             alignItems="center"
             justifyContent="center"
-            onMouseDown={onBack}
+            onMouseDown={showQueues}
           >
             <text fg="#FFFFFF">← Back</text>
           </box>
           <text fg="#F3F6FF">
-            {queueName} · {jobs.length} jobs
+            {selectedQueue} · {jobs.length} jobs
           </text>
         </box>
         <box flexDirection="row" alignItems="center" gap={1}>
@@ -92,7 +83,7 @@ export function Jobs({
             backgroundColor="#2563EB"
             alignItems="center"
             justifyContent="center"
-            onMouseDown={onOpenAddJob}
+            onMouseDown={openAddJob}
           >
             <text fg="#FFFFFF">Add Job</text>
           </box>
@@ -102,16 +93,16 @@ export function Jobs({
             backgroundColor="#DC2626"
             alignItems="center"
             justifyContent="center"
-            onMouseDown={onObliterate}
+            onMouseDown={obliterateQueue}
           >
             <text fg="#FFFFFF">
-              {isObliterating ? "Obliterating..." : "Obliterate"}
+              {isObliteratingQueue ? "Obliterating..." : "Obliterate"}
             </text>
           </box>
         </box>
       </box>
 
-      {isLoading ? (
+      {isLoadingJobs ? (
         <box flexGrow={1} alignItems="center" justifyContent="center">
           <text fg="#FACC15">◌ Loading jobs...</text>
         </box>
@@ -168,7 +159,7 @@ export function Jobs({
                       borderColor="#DC2626"
                       alignItems="center"
                       justifyContent="center"
-                      onMouseDown={() => onDelete(job.id)}
+                      onMouseDown={() => deleteJob(job.id)}
                     >
                       <text fg="#FB7185">
                         {isDeleting ? "Deleting..." : "Delete"}
@@ -191,15 +182,16 @@ export function Jobs({
         </scrollbox>
       )}
 
-      {!isLoading && message ? (
+      {!isLoadingJobs && jobsMessage ? (
         <text
           fg={
-            message.startsWith("Deleted ") || message.startsWith("Added ")
+            jobsMessage.startsWith("Deleted ") ||
+            jobsMessage.startsWith("Added ")
               ? "#4ADE80"
               : "#FB7185"
           }
         >
-          {message}
+          {jobsMessage}
         </text>
       ) : null}
     </box>

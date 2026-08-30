@@ -1,31 +1,22 @@
 import type { TextareaRenderable } from "@opentui/core";
 import { useRef, useState } from "react";
+import { useTokai } from "../provider";
 
-type AddJobProps = {
-  queueName: string;
-  name: string;
-  data: string;
-  message: string;
-  isAdding: boolean;
-  onNameChange: (value: string) => void;
-  onDataChange: (value: string) => void;
-  onSubmit: () => void;
-  onBack: () => void;
-};
-
-export function AddJob({
-  queueName,
-  name,
-  data,
-  message,
-  isAdding,
-  onNameChange,
-  onDataChange,
-  onSubmit,
-  onBack,
-}: AddJobProps) {
+export function AddJob() {
   const [focusedField, setFocusedField] = useState<"name" | "data">("name");
   const dataInputRef = useRef<TextareaRenderable>(null);
+  const {
+    state: {
+      selectedQueue,
+      newJobName,
+      newJobData,
+      jobsMessage,
+      isAddingJob,
+    },
+    actions: { setNewJobName, setNewJobData, addJob, closeAddJob },
+  } = useTokai();
+
+  if (!selectedQueue) return null;
 
   return (
     <box
@@ -45,11 +36,11 @@ export function AddJob({
           backgroundColor="#253552"
           alignItems="center"
           justifyContent="center"
-          onMouseDown={onBack}
+          onMouseDown={closeAddJob}
         >
           <text fg="#FFFFFF">← Back</text>
         </box>
-        <text fg="#F3F6FF">Add job to {queueName}</text>
+        <text fg="#F3F6FF">Add job to {selectedQueue}</text>
       </box>
 
       <box
@@ -70,12 +61,12 @@ export function AddJob({
           onMouseDown={() => setFocusedField("name")}
         >
           <input
-            value={name}
+            value={newJobName}
             placeholder="job-name"
             placeholderColor="#59677F"
             textColor="#F3F6FF"
             focused={focusedField === "name"}
-            onInput={onNameChange}
+            onInput={setNewJobName}
             onSubmit={() => setFocusedField("data")}
           />
         </box>
@@ -91,14 +82,14 @@ export function AddJob({
             ref={dataInputRef}
             width="100%"
             height="100%"
-            initialValue={data}
+            initialValue={newJobData}
             placeholder="{}"
             placeholderColor="#59677F"
             textColor="#F3F6FF"
             wrapMode="word"
             focused={focusedField === "data"}
             onContentChange={() =>
-              onDataChange(dataInputRef.current?.plainText ?? "")
+              setNewJobData(dataInputRef.current?.plainText ?? "")
             }
           />
         </box>
@@ -110,9 +101,11 @@ export function AddJob({
             backgroundColor="#2563EB"
             alignItems="center"
             justifyContent="center"
-            onMouseDown={onSubmit}
+            onMouseDown={addJob}
           >
-            <text fg="#FFFFFF">{isAdding ? "Adding..." : "Add Job"}</text>
+            <text fg="#FFFFFF">
+              {isAddingJob ? "Adding..." : "Add Job"}
+            </text>
           </box>
           <box
             width={12}
@@ -120,13 +113,13 @@ export function AddJob({
             backgroundColor="#253552"
             alignItems="center"
             justifyContent="center"
-            onMouseDown={onBack}
+            onMouseDown={closeAddJob}
           >
             <text fg="#FFFFFF">Cancel</text>
           </box>
         </box>
 
-        {message ? <text fg="#FB7185">{message}</text> : null}
+        {jobsMessage ? <text fg="#FB7185">{jobsMessage}</text> : null}
       </box>
     </box>
   );
