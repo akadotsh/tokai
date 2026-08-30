@@ -1,8 +1,14 @@
 import { RedisClient } from "bun";
-import { IRedisClient, Queue, createBunRedisClient } from "bullmq";
+import {
+  IRedisClient,
+  Queue,
+  createBunRedisClient,
+  type QueueMeta,
+} from "bullmq";
 
 export type JobCounts = {
   name: string;
+  meta: QueueMeta;
   counts: Record<QueueJobStatus, number>;
 };
 
@@ -86,15 +92,36 @@ class RedisConnection {
     } while (cursor !== "0");
 
     const queueNames = [...queues].sort();
+
     const jobCounts: JobCounts[] = await Promise.all(
-      queueNames.map(async (name) => ({
-        name,
-        counts: await this.getQueueJobCounts(name),
-      })),
+      queueNames.map(async (name) => {
+        const [meta, counts] = await Promise.all([
+          this.getQueueMeta(name),
+          this.getQueueJobCounts(name),
+        ]);
+
+        return { name, meta, counts };
+      }),
     );
-    console.log("BullMQ job counts:", jobCounts);
 
     return jobCounts;
+  }
+
+  async getQueueMeta(queueName: string) {
+    if (!this.connection) {
+      throw new Error("Connect to Redis before fetching queue meta.");
+    }
+
+    const queue = new Queue(queueName, {
+      connection: this.connection.duplicate(),
+      skipMetasUpdate: true,
+    });
+
+    try {
+      return await queue.getMeta();
+    } finally {
+      await queue.close();
+    }
   }
 
   async getQueueJobCounts(queueName: string) {

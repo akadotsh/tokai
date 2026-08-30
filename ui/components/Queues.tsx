@@ -29,6 +29,11 @@ export function Queues({
   onRefresh,
   onQueueSelect,
 }: QueuesProps) {
+  const queueRows = Array.from(
+    { length: Math.ceil(queues.length / 2) },
+    (_, index) => queues.slice(index * 2, index * 2 + 2),
+  );
+
   return (
     <box flexGrow={1} padding={2} flexDirection="column" gap={1}>
       <box flexDirection="row" alignItems="center" gap={2}>
@@ -46,40 +51,57 @@ export function Queues({
       </box>
 
       <box width="100%" flexDirection="column" gap={1}>
-        {queues.map(({ name, counts }) => (
+        {queueRows.map((row, rowIndex) => (
           <box
-            key={name}
+            key={row[0]?.name ?? rowIndex}
             width="100%"
-            height={5}
-            border
-            borderColor="#253552"
-            paddingLeft={1}
-            paddingRight={1}
-            alignItems="center"
             flexDirection="row"
-            onMouseDown={() => onQueueSelect(name)}
+            justifyContent="space-between"
           >
-            <text width={20} fg="#F3F6FF">
-              {name}
-            </text>
-            <box flexGrow={1} flexDirection="column">
-              <box flexDirection="row" gap={2}>
-                <text fg="#4ADE80">completed {counts.completed}</text>
-                <text fg="#FB7185">failed {counts.failed}</text>
-                <text fg="#FACC15">delayed {counts.delayed}</text>
-                <text fg="#60A5FA">active {counts.active}</text>
-                <text fg="#C7D2E9">wait {counts.wait}</text>
+            {row.map(({ name, meta, counts }) => (
+              <box
+                key={name}
+                width="49%"
+                height={8}
+                border
+                borderColor="#253552"
+                paddingLeft={1}
+                paddingRight={1}
+                flexDirection="column"
+                onMouseDown={() => onQueueSelect(name)}
+              >
+                <box
+                  width="100%"
+                  flexDirection="row"
+                  justifyContent="space-between"
+                >
+                  <box flexDirection="column">
+                    <text fg="#F3F6FF">{name}</text>
+                    {meta.paused ? <text fg="#FACC15">● Paused</text> : null}
+                  </box>
+                  <text fg="#8EA2C9">→</text>
+                </box>
+                <box flexDirection="row" gap={2}>
+                  <text fg="#4ADE80">completed {counts.completed}</text>
+                  <text fg="#FB7185">failed {counts.failed}</text>
+                </box>
+                <box flexDirection="row" gap={2}>
+                  <text fg="#FACC15">delayed {counts.delayed}</text>
+                  <text fg="#60A5FA">active {counts.active}</text>
+                  <text fg="#C7D2E9">wait {counts.wait}</text>
+                </box>
+                <box flexDirection="row" gap={2}>
+                  <text fg="#A78BFA">
+                    waiting-children {counts["waiting-children"]}
+                  </text>
+                  <text fg="#F472B6">prioritized {counts.prioritized}</text>
+                </box>
+                <box flexDirection="row" gap={2}>
+                  <text fg="#94A3B8">paused {counts.paused}</text>
+                  <text fg="#2DD4BF">repeat {counts.repeat}</text>
+                </box>
               </box>
-              <box flexDirection="row" gap={2}>
-                <text fg="#A78BFA">
-                  waiting-children {counts["waiting-children"]}
-                </text>
-                <text fg="#F472B6">prioritized {counts.prioritized}</text>
-                <text fg="#94A3B8">paused {counts.paused}</text>
-                <text fg="#2DD4BF">repeat {counts.repeat}</text>
-              </box>
-            </box>
-            <text fg="#8EA2C9">→</text>
+            ))}
           </box>
         ))}
       </box>
