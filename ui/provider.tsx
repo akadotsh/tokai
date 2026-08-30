@@ -5,7 +5,11 @@ import {
   useReducer,
   type PropsWithChildren,
 } from "react";
-import { redisConnection, type QueueRef } from "../server/index";
+import {
+  redisConnection,
+  type QueueJobStatus,
+  type QueueRef,
+} from "../server/index";
 import { createInitialState, reducer, type AppState } from "./reducer";
 
 type TokaiActions = {
@@ -13,7 +17,12 @@ type TokaiActions = {
   connect: () => Promise<void>;
   disconnect: () => Promise<void>;
   fetchQueues: () => Promise<void>;
-  fetchJobs: (queue: QueueRef, page?: number) => Promise<void>;
+  fetchJobs: (
+    queue: QueueRef,
+    page?: number,
+    status?: QueueJobStatus | null,
+  ) => Promise<void>;
+  filterJobsByStatus: (status: QueueJobStatus | null) => Promise<void>;
   showPreviousJobsPage: () => Promise<void>;
   showNextJobsPage: () => Promise<void>;
   showQueues: () => void;
@@ -46,6 +55,7 @@ export function TokaiProvider({ children }: PropsWithChildren) {
     selectedQueue,
     jobsPage,
     hasNextJobsPage,
+    jobsStatusFilter,
     isLoadingJobs,
     deletingJobId,
     newJobName,
@@ -95,6 +105,7 @@ export function TokaiProvider({ children }: PropsWithChildren) {
             selectedQueue,
             jobsPage,
             JOBS_PAGE_SIZE,
+            jobsStatusFilter,
           );
 
           if (isActive) {
@@ -121,6 +132,7 @@ export function TokaiProvider({ children }: PropsWithChildren) {
     isLoadingJobs,
     isObliteratingQueue,
     jobsPage,
+    jobsStatusFilter,
     selectedQueue?.name,
     selectedQueue?.prefix,
   ]);
@@ -182,14 +194,19 @@ export function TokaiProvider({ children }: PropsWithChildren) {
     }
   };
 
-  const fetchJobs = async (queue: QueueRef, page = 1) => {
-    dispatch({ type: "jobsLoading", queue, page });
+  const fetchJobs = async (
+    queue: QueueRef,
+    page = 1,
+    status: QueueJobStatus | null = null,
+  ) => {
+    dispatch({ type: "jobsLoading", queue, page, status });
 
     try {
       const result = await redisConnection.getQueueJobs(
         queue,
         page,
         JOBS_PAGE_SIZE,
+        status,
       );
       dispatch({ type: "jobsLoaded", queue, result });
     } catch (error) {
@@ -198,9 +215,25 @@ export function TokaiProvider({ children }: PropsWithChildren) {
         type: "jobsFailed",
         queue,
         page,
+        status,
         message: `Could not fetch jobs: ${reason}`,
       });
     }
+  };
+
+  const filterJobsByStatus = async (status: QueueJobStatus | null) => {
+    if (
+      !selectedQueue ||
+      status === jobsStatusFilter ||
+      isLoadingJobs ||
+      deletingJobId ||
+      isAddingJob ||
+      isObliteratingQueue
+    ) {
+      return;
+    }
+
+    await fetchJobs(selectedQueue, 1, status);
   };
 
   const showPreviousJobsPage = async () => {
@@ -214,7 +247,7 @@ export function TokaiProvider({ children }: PropsWithChildren) {
     ) {
       return;
     }
-    await fetchJobs(selectedQueue, jobsPage - 1);
+    await fetchJobs(selectedQueue, jobsPage - 1, jobsStatusFilter);
   };
 
   const showNextJobsPage = async () => {
@@ -228,7 +261,7 @@ export function TokaiProvider({ children }: PropsWithChildren) {
     ) {
       return;
     }
-    await fetchJobs(selectedQueue, jobsPage + 1);
+    await fetchJobs(selectedQueue, jobsPage + 1, jobsStatusFilter);
   };
 
   const showQueues = () => {
@@ -332,6 +365,7 @@ export function TokaiProvider({ children }: PropsWithChildren) {
     disconnect,
     fetchQueues,
     fetchJobs,
+    filterJobsByStatus,
     showPreviousJobsPage,
     showNextJobsPage,
     showQueues,

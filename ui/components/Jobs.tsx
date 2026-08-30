@@ -1,5 +1,9 @@
 import { SyntaxStyle } from "@opentui/core";
-import type { QueueJobStatus } from "../../server/index";
+import { useState } from "react";
+import {
+  queueJobStatuses,
+  type QueueJobStatus,
+} from "../../server/index";
 import { useTokai } from "../provider";
 
 const statusColors: Record<QueueJobStatus, string> = {
@@ -13,6 +17,17 @@ const statusColors: Record<QueueJobStatus, string> = {
   paused: "#94A3B8",
   repeat: "#2DD4BF",
 };
+
+const statusFilterOptions: Array<{
+  label: string;
+  value: QueueJobStatus | null;
+}> = [
+  { label: "all", value: null },
+  ...queueJobStatuses.map((status) => ({
+    label: status,
+    value: status,
+  })),
+];
 
 const jsonSyntaxStyle = SyntaxStyle.fromStyles({
   default: { fg: "#C7D2E9" },
@@ -29,6 +44,7 @@ function formatJobData(data: unknown) {
 }
 
 export function Jobs() {
+  const [isStatusFilterOpen, setIsStatusFilterOpen] = useState(false);
   const {
     state: {
       selectedQueue,
@@ -36,6 +52,7 @@ export function Jobs() {
       jobsPage,
       jobsTotal,
       hasNextJobsPage,
+      jobsStatusFilter,
       isLoadingJobs,
       jobsMessage,
       deletingJobId,
@@ -48,6 +65,7 @@ export function Jobs() {
       obliterateQueue,
       showPreviousJobsPage,
       showNextJobsPage,
+      filterJobsByStatus,
     },
   } = useTokai();
 
@@ -70,9 +88,11 @@ export function Jobs() {
     >
       <box
         width="100%"
+        height={3}
         flexDirection="row"
         alignItems="center"
         justifyContent="space-between"
+        zIndex={1_000}
       >
         <box flexDirection="row" alignItems="center" gap={2}>
           <box
@@ -89,7 +109,65 @@ export function Jobs() {
             {selectedQueue.name} · {jobsTotal} jobs
           </text>
         </box>
-        <box flexDirection="row" alignItems="center" gap={1}>
+        <box height={3} flexDirection="row" alignItems="center" gap={1}>
+          <box width={30} height={3} position="relative" zIndex={1_500}>
+            <box
+              width={30}
+              height={3}
+              border
+              borderColor="#3B82F6"
+              paddingLeft={1}
+              paddingRight={1}
+              flexDirection="row"
+              alignItems="center"
+              justifyContent="space-between"
+              onMouseDown={() => setIsStatusFilterOpen((isOpen) => !isOpen)}
+            >
+              <text fg="#C7D2E9">
+                Status: {jobsStatusFilter ?? "all"}
+              </text>
+              <text fg="#8EA2C9">{isStatusFilterOpen ? "▴" : "▾"}</text>
+            </box>
+
+            {isStatusFilterOpen ? (
+              <box
+                position="absolute"
+                top={3}
+                left={0}
+                zIndex={2_000}
+                width={30}
+                height={statusFilterOptions.length + 2}
+                border
+                borderColor="#3B82F6"
+                backgroundColor="#000000"
+                flexDirection="column"
+              >
+                {statusFilterOptions.map((option) => {
+                  const isSelected = jobsStatusFilter === option.value;
+
+                  return (
+                    <box
+                      key={option.label}
+                      width="100%"
+                      height={1}
+                      paddingLeft={1}
+                      paddingRight={1}
+                      backgroundColor={isSelected ? "#1D4ED8" : "#000000"}
+                      alignItems="center"
+                      onMouseDown={() => {
+                        setIsStatusFilterOpen(false);
+                        void filterJobsByStatus(option.value);
+                      }}
+                    >
+                      <text fg={isSelected ? "#FFFFFF" : "#8290AA"}>
+                        {option.label}
+                      </text>
+                    </box>
+                  );
+                })}
+              </box>
+            ) : null}
+          </box>
           <box
             width={14}
             height={3}
@@ -115,7 +193,7 @@ export function Jobs() {
         </box>
       </box>
 
-      {isLoadingJobs ? (
+      {isLoadingJobs && jobs.length === 0 ? (
         <box flexGrow={1} alignItems="center" justifyContent="center">
           <text fg="#FACC15">◌ Loading jobs...</text>
         </box>

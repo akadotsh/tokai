@@ -39,11 +39,12 @@ export type QueueJobsPage = {
   jobs: QueueJobSummary[];
   page: number;
   pageSize: number;
+  status: QueueJobStatus | null;
   total: number;
   hasNextPage: boolean;
 };
 
-const queueJobStatuses: QueueJobStatus[] = [
+export const queueJobStatuses: QueueJobStatus[] = [
   "completed",
   "failed",
   "delayed",
@@ -168,7 +169,12 @@ class RedisConnection {
     }
   }
 
-  async getQueueJobs(queueRef: QueueRef, page: number, pageSize: number) {
+  async getQueueJobs(
+    queueRef: QueueRef,
+    page: number,
+    pageSize: number,
+    status: QueueJobStatus | null = null,
+  ) {
     if (!this.connection) {
       throw new Error("Connect to Redis before fetching jobs.");
     }
@@ -204,29 +210,30 @@ class RedisConnection {
       const getJobCounts = queue.getJobCounts.bind(queue) as (
         ...types: QueueJobStatus[]
       ) => Promise<Record<string, number>>;
-      const counts = await getJobCounts(...queueJobStatuses);
-      const total = queueJobStatuses.reduce(
-        (sum, status) => sum + (counts[status] ?? 0),
+      const statuses = status ? [status] : queueJobStatuses;
+      const counts = await getJobCounts(...statuses);
+      const total = statuses.reduce(
+        (sum, currentStatus) => sum + (counts[currentStatus] ?? 0),
         0,
       );
       const pageStart = (page - 1) * pageSize;
       const pageEnd = pageStart + pageSize;
       let statusStart = 0;
       const jobsByStatus = await Promise.all(
-        queueJobStatuses.map(async (status) => {
-          const statusCount = counts[status] ?? 0;
+        statuses.map(async (currentStatus) => {
+          const statusCount = counts[currentStatus] ?? 0;
           const start = Math.max(0, pageStart - statusStart);
           const end = Math.min(statusCount, pageEnd - statusStart) - 1;
           statusStart += statusCount;
 
           if (start > end) return [];
 
-          const jobs = await getJobs([status], start, end, true);
+          const jobs = await getJobs([currentStatus], start, end, true);
           return jobs.map(
             (job): QueueJobSummary => ({
               id: job.id ?? "(no id)",
               name: job.name,
-              status,
+              status: currentStatus,
               timestamp: job.timestamp,
               data: job.data,
             }),
@@ -238,6 +245,7 @@ class RedisConnection {
         jobs: jobsByStatus.flat(),
         page,
         pageSize,
+        status,
         total,
         hasNextPage: pageEnd < total,
       } satisfies QueueJobsPage;

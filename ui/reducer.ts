@@ -1,5 +1,6 @@
 import type {
   JobCounts,
+  QueueJobStatus,
   QueueJobsPage,
   QueueJobSummary,
   QueueRef,
@@ -13,6 +14,7 @@ export type AppState = {
   jobsPage: number;
   jobsTotal: number;
   hasNextJobsPage: boolean;
+  jobsStatusFilter: QueueJobStatus | null;
   jobsMessage: string;
   isLoadingJobs: boolean;
   deletingJobId: string | null;
@@ -34,10 +36,21 @@ export type AppAction =
   | { type: "queuesLoaded"; queues: JobCounts[] }
   | { type: "queuesRefreshed"; queues: JobCounts[] }
   | { type: "queuesFailed"; message: string }
-  | { type: "jobsLoading"; queue: QueueRef; page: number }
+  | {
+      type: "jobsLoading";
+      queue: QueueRef;
+      page: number;
+      status: QueueJobStatus | null;
+    }
   | { type: "jobsLoaded"; queue: QueueRef; result: QueueJobsPage }
   | { type: "jobsRefreshed"; queue: QueueRef; result: QueueJobsPage }
-  | { type: "jobsFailed"; queue: QueueRef; page: number; message: string }
+  | {
+      type: "jobsFailed";
+      queue: QueueRef;
+      page: number;
+      status: QueueJobStatus | null;
+      message: string;
+    }
   | { type: "selectedQueueMissing"; queue: QueueRef }
   | { type: "showQueues" }
   | { type: "jobDeleteStarted"; jobId: string }
@@ -63,6 +76,7 @@ export function createInitialState(isConnected: boolean): AppState {
     jobsPage: 1,
     jobsTotal: 0,
     hasNextJobsPage: false,
+    jobsStatusFilter: null,
     jobsMessage: "",
     isLoadingJobs: false,
     deletingJobId: null,
@@ -109,12 +123,13 @@ export function reducer(state: AppState, action: AppAction): AppState {
       return {
         ...state,
         selectedQueue: action.queue,
-        jobs: [],
+        jobs: isSameQueue(state.selectedQueue, action.queue) ? state.jobs : [],
         jobsPage: action.page,
         jobsTotal: isSameQueue(state.selectedQueue, action.queue)
           ? state.jobsTotal
           : 0,
         hasNextJobsPage: false,
+        jobsStatusFilter: action.status,
         jobsMessage: "",
         isLoadingJobs: true,
         isAddJobScreenOpen: false,
@@ -125,7 +140,8 @@ export function reducer(state: AppState, action: AppAction): AppState {
     case "jobsLoaded":
       if (
         !isSameQueue(state.selectedQueue, action.queue) ||
-        state.jobsPage !== action.result.page
+        state.jobsPage !== action.result.page ||
+        state.jobsStatusFilter !== action.result.status
       ) {
         return state;
       }
@@ -139,7 +155,8 @@ export function reducer(state: AppState, action: AppAction): AppState {
     case "jobsRefreshed":
       if (
         !isSameQueue(state.selectedQueue, action.queue) ||
-        state.jobsPage !== action.result.page
+        state.jobsPage !== action.result.page ||
+        state.jobsStatusFilter !== action.result.status
       ) {
         return state;
       }
@@ -152,12 +169,16 @@ export function reducer(state: AppState, action: AppAction): AppState {
     case "jobsFailed":
       if (
         !isSameQueue(state.selectedQueue, action.queue) ||
-        state.jobsPage !== action.page
+        state.jobsPage !== action.page ||
+        state.jobsStatusFilter !== action.status
       ) {
         return state;
       }
       return {
         ...state,
+        jobs: [],
+        jobsTotal: 0,
+        hasNextJobsPage: false,
         jobsMessage: action.message,
         isLoadingJobs: false,
       };
@@ -170,6 +191,7 @@ export function reducer(state: AppState, action: AppAction): AppState {
         jobsPage: 1,
         jobsTotal: 0,
         hasNextJobsPage: false,
+        jobsStatusFilter: null,
         jobsMessage: "",
         isLoadingJobs: false,
         isAddJobScreenOpen: false,
@@ -185,6 +207,7 @@ export function reducer(state: AppState, action: AppAction): AppState {
         jobsPage: 1,
         jobsTotal: 0,
         hasNextJobsPage: false,
+        jobsStatusFilter: null,
         jobsMessage: "",
         isLoadingJobs: false,
         deletingJobId: null,
@@ -237,7 +260,11 @@ export function reducer(state: AppState, action: AppAction): AppState {
     case "jobAdded":
       return {
         ...state,
-        jobsTotal: state.jobsTotal + 1,
+        jobsTotal:
+          state.jobsStatusFilter === null ||
+          state.jobsStatusFilter === action.job.status
+            ? state.jobsTotal + 1
+            : state.jobsTotal,
         isAddJobScreenOpen: false,
         newJobName: "",
         newJobData: "{}",
@@ -259,6 +286,7 @@ export function reducer(state: AppState, action: AppAction): AppState {
         jobsPage: 1,
         jobsTotal: 0,
         hasNextJobsPage: false,
+        jobsStatusFilter: null,
         isObliteratingQueue: false,
         message: `Obliterated queue "${action.queue.name}".`,
       };
