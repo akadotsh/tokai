@@ -1,37 +1,39 @@
-import { useState } from "react";
-import {
-  redisConnection,
-  type JobCounts,
-  type QueueJobSummary,
-} from "../server/index";
+import { useReducer } from "react";
+import { redisConnection } from "../server/index";
 import { ConnectionForm } from "./components/ConnectionForm";
 import { Layout } from "./components/Layout";
+import { createInitialState, reducer } from "./reducer";
 
 export function App() {
-  const [redisUrl, setRedisUrl] = useState("");
-  const [queues, setQueues] = useState<JobCounts[]>([]);
-  const [selectedQueue, setSelectedQueue] = useState<string | null>(null);
-  const [jobs, setJobs] = useState<QueueJobSummary[]>([]);
-  const [jobsMessage, setJobsMessage] = useState("");
-  const [isLoadingJobs, setIsLoadingJobs] = useState(false);
-  const [deletingJobId, setDeletingJobId] = useState<string | null>(null);
-  const [isObliteratingQueue, setIsObliteratingQueue] = useState(false);
-  const [message, setMessage] = useState("");
-  const [isConnected, setIsConnected] = useState(redisConnection.isConnected);
+  const [state, dispatch] = useReducer(
+    reducer,
+    redisConnection.isConnected,
+    createInitialState,
+  );
+  const {
+    redisUrl,
+    queues,
+    selectedQueue,
+    jobs,
+    jobsMessage,
+    isLoadingJobs,
+    deletingJobId,
+    isObliteratingQueue,
+    message,
+    isConnected,
+  } = state;
 
   const fetchQueues = async () => {
     try {
-      setMessage("Scanning for BullMQ queues...");
+      dispatch({ type: "queuesLoading" });
       const jobCounts = await redisConnection.getQueues();
-      setQueues(jobCounts);
-      setMessage(
-        jobCounts.length === 0
-          ? "No BullMQ queues found."
-          : `Found ${jobCounts.length} BullMQ queue${jobCounts.length === 1 ? "" : "s"}.`,
-      );
+      dispatch({ type: "queuesLoaded", queues: jobCounts });
     } catch (error) {
       const reason = error instanceof Error ? error.message : "Unknown error";
-      setMessage(`Could not scan for queues: ${reason}`);
+      dispatch({
+        type: "queuesFailed",
+        message: `Could not scan for queues: ${reason}`,
+      });
     }
   };
 
@@ -39,70 +41,63 @@ export function App() {
     const url = redisUrl.trim();
 
     if (!url) {
-      setMessage("Please enter a Redis URL.");
+      dispatch({ type: "messageSet", message: "Please enter a Redis URL." });
       return;
     }
 
     if (!url.startsWith("redis://") && !url.startsWith("rediss://")) {
-      setMessage("Redis URLs must start with redis:// or rediss://");
+      dispatch({
+        type: "messageSet",
+        message: "Redis URLs must start with redis:// or rediss://",
+      });
       return;
     }
 
     try {
-      setMessage("Connecting to Redis...");
+      dispatch({ type: "messageSet", message: "Connecting to Redis..." });
       await redisConnection.connect(url);
-      setRedisUrl(url);
-      setIsConnected(true);
+      dispatch({ type: "connected", redisUrl: url });
       await fetchQueues();
     } catch (error) {
       const reason = error instanceof Error ? error.message : "Unknown error";
-      setMessage(`Could not connect to Redis: ${reason}`);
+      dispatch({
+        type: "messageSet",
+        message: `Could not connect to Redis: ${reason}`,
+      });
     }
   };
 
   const disconnect = async () => {
     try {
       await redisConnection.disconnect();
-      setRedisUrl("");
-      setQueues([]);
-      setSelectedQueue(null);
-      setJobs([]);
-      setJobsMessage("");
-      setIsLoadingJobs(false);
-      setDeletingJobId(null);
-      setIsObliteratingQueue(false);
-      setMessage("");
-      setIsConnected(false);
+      dispatch({ type: "disconnected" });
     } catch (error) {
       const reason = error instanceof Error ? error.message : "Unknown error";
-      setMessage(`Could not disconnect from Redis: ${reason}`);
+      dispatch({
+        type: "messageSet",
+        message: `Could not disconnect from Redis: ${reason}`,
+      });
     }
   };
 
   const fetchJobs = async (queueName: string) => {
-    setSelectedQueue(queueName);
-    setJobs([]);
-    setJobsMessage("");
-    setIsLoadingJobs(true);
+    dispatch({ type: "jobsLoading", queueName });
 
     try {
       const queueJobs = await redisConnection.getQueueJobs(queueName);
-      setJobs(queueJobs);
+      dispatch({ type: "jobsLoaded", queueName, jobs: queueJobs });
     } catch (error) {
       const reason = error instanceof Error ? error.message : "Unknown error";
-      setJobsMessage(`Could not fetch jobs: ${reason}`);
-    } finally {
-      setIsLoadingJobs(false);
+      dispatch({
+        type: "jobsFailed",
+        queueName,
+        message: `Could not fetch jobs: ${reason}`,
+      });
     }
   };
 
   const showQueues = () => {
-    setSelectedQueue(null);
-    setJobs([]);
-    setJobsMessage("");
-    setIsLoadingJobs(false);
-    setDeletingJobId(null);
-    setIsObliteratingQueue(false);
+    dispatch({ type: "showQueues" });
     void fetchQueues();
   };
 
@@ -111,20 +106,18 @@ export function App() {
       return;
     }
 
-    setDeletingJobId(jobId);
-    setJobsMessage("");
+    dispatch({ type: "jobDeleteStarted", jobId });
 
     try {
       await redisConnection.removeQueueJob(selectedQueue, jobId);
-      setJobs((currentJobs) =>
-        currentJobs.filter((job) => job.id !== jobId),
-      );
-      setJobsMessage(`Deleted job "${jobId}".`);
+      dispatch({ type: "jobDeleted", jobId });
     } catch (error) {
       const reason = error instanceof Error ? error.message : "Unknown error";
-      setJobsMessage(`Could not delete job: ${reason}`);
-    } finally {
-      setDeletingJobId(null);
+      dispatch({
+        type: "jobDeleteFailed",
+        jobId,
+        message: `Could not delete job: ${reason}`,
+      });
     }
   };
 
@@ -134,22 +127,17 @@ export function App() {
     }
 
     const queueName = selectedQueue;
-    setIsObliteratingQueue(true);
-    setJobsMessage("");
+    dispatch({ type: "queueObliterateStarted" });
 
     try {
       await redisConnection.obliterateQueue(queueName);
-      setQueues((currentQueues) =>
-        currentQueues.filter((queue) => queue.name !== queueName),
-      );
-      setSelectedQueue(null);
-      setJobs([]);
-      setMessage(`Obliterated queue "${queueName}".`);
+      dispatch({ type: "queueObliterated", queueName });
     } catch (error) {
       const reason = error instanceof Error ? error.message : "Unknown error";
-      setJobsMessage(`Could not obliterate queue: ${reason}`);
-    } finally {
-      setIsObliteratingQueue(false);
+      dispatch({
+        type: "queueObliterateFailed",
+        message: `Could not obliterate queue: ${reason}`,
+      });
     }
   };
 
@@ -178,10 +166,7 @@ export function App() {
     <ConnectionForm
       redisUrl={redisUrl}
       message={message}
-      onRedisUrlChange={(value) => {
-        setRedisUrl(value);
-        setMessage("");
-      }}
+      onRedisUrlChange={(value) => dispatch({ type: "redisUrlChanged", value })}
       onSubmit={connect}
     />
   );
