@@ -8,7 +8,11 @@ type QueuesProps = {
 };
 
 function getMessageColor(message: string) {
-  if (message.startsWith("Found ") || message.startsWith("Metadata for")) {
+  if (
+    message.startsWith("Found ") ||
+    message.startsWith("Metadata for") ||
+    message.startsWith("Obliterated ")
+  ) {
     return "#4ADE80";
   }
 

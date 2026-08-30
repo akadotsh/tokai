@@ -7,8 +7,10 @@ type JobsProps = {
   isLoading: boolean;
   message: string;
   deletingJobId: string | null;
+  isObliterating: boolean;
   onBack: () => void;
   onDelete: (jobId: string) => void;
+  onObliterate: () => void;
 };
 
 const statusColors: Record<QueueJobStatus, string> = {
@@ -43,8 +45,10 @@ export function Jobs({
   isLoading,
   message,
   deletingJobId,
+  isObliterating,
   onBack,
   onDelete,
+  onObliterate,
 }: JobsProps) {
   return (
     <box
@@ -58,20 +62,39 @@ export function Jobs({
       flexDirection="column"
       gap={1}
     >
-      <box flexDirection="row" alignItems="center" gap={2}>
+      <box
+        width="100%"
+        flexDirection="row"
+        alignItems="center"
+        justifyContent="space-between"
+      >
+        <box flexDirection="row" alignItems="center" gap={2}>
+          <box
+            width={10}
+            height={3}
+            backgroundColor="#253552"
+            alignItems="center"
+            justifyContent="center"
+            onMouseDown={onBack}
+          >
+            <text fg="#FFFFFF">← Back</text>
+          </box>
+          <text fg="#F3F6FF">
+            {queueName} · {jobs.length} jobs
+          </text>
+        </box>
         <box
-          width={10}
+          width={18}
           height={3}
-          backgroundColor="#253552"
+          backgroundColor="#DC2626"
           alignItems="center"
           justifyContent="center"
-          onMouseDown={onBack}
+          onMouseDown={onObliterate}
         >
-          <text fg="#FFFFFF">← Back</text>
+          <text fg="#FFFFFF">
+            {isObliterating ? "Obliterating..." : "Obliterate"}
+          </text>
         </box>
-        <text fg="#F3F6FF">
-          {queueName} · {jobs.length} jobs
-        </text>
       </box>
 
       {isLoading ? (

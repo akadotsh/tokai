@@ -15,6 +15,7 @@ export function App() {
   const [jobsMessage, setJobsMessage] = useState("");
   const [isLoadingJobs, setIsLoadingJobs] = useState(false);
   const [deletingJobId, setDeletingJobId] = useState<string | null>(null);
+  const [isObliteratingQueue, setIsObliteratingQueue] = useState(false);
   const [message, setMessage] = useState("");
   const [isConnected, setIsConnected] = useState(redisConnection.isConnected);
 
@@ -69,6 +70,7 @@ export function App() {
       setJobsMessage("");
       setIsLoadingJobs(false);
       setDeletingJobId(null);
+      setIsObliteratingQueue(false);
       setMessage("");
       setIsConnected(false);
     } catch (error) {
@@ -100,11 +102,12 @@ export function App() {
     setJobsMessage("");
     setIsLoadingJobs(false);
     setDeletingJobId(null);
+    setIsObliteratingQueue(false);
     void fetchQueues();
   };
 
   const deleteJob = async (jobId: string) => {
-    if (!selectedQueue || deletingJobId) {
+    if (!selectedQueue || deletingJobId || isObliteratingQueue) {
       return;
     }
 
@@ -125,6 +128,31 @@ export function App() {
     }
   };
 
+  const obliterateQueue = async () => {
+    if (!selectedQueue || isObliteratingQueue || deletingJobId) {
+      return;
+    }
+
+    const queueName = selectedQueue;
+    setIsObliteratingQueue(true);
+    setJobsMessage("");
+
+    try {
+      await redisConnection.obliterateQueue(queueName);
+      setQueues((currentQueues) =>
+        currentQueues.filter((queue) => queue.name !== queueName),
+      );
+      setSelectedQueue(null);
+      setJobs([]);
+      setMessage(`Obliterated queue "${queueName}".`);
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : "Unknown error";
+      setJobsMessage(`Could not obliterate queue: ${reason}`);
+    } finally {
+      setIsObliteratingQueue(false);
+    }
+  };
+
   if (isConnected) {
     return (
       <Layout
@@ -135,11 +163,13 @@ export function App() {
         jobsMessage={jobsMessage}
         isLoadingJobs={isLoadingJobs}
         deletingJobId={deletingJobId}
+        isObliteratingQueue={isObliteratingQueue}
         onDisconnect={disconnect}
         onRefresh={fetchQueues}
         onQueueSelect={fetchJobs}
         onBackToQueues={showQueues}
         onDeleteJob={deleteJob}
+        onObliterateQueue={obliterateQueue}
       />
     );
   }

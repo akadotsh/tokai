@@ -187,6 +187,23 @@ class RedisConnection {
       await queue.close();
     }
   }
+
+  async obliterateQueue(queueName: string) {
+    if (!this.connection) {
+      throw new Error("Connect to Redis before obliterating a queue.");
+    }
+
+    const queue = new Queue(queueName, {
+      connection: this.connection.duplicate(),
+      skipMetasUpdate: true,
+    });
+
+    try {
+      await queue.obliterate();
+    } finally {
+      await queue.close();
+    }
+  }
 }
 
 export const redisConnection = new RedisConnection();
