@@ -5,6 +5,7 @@ import {
   type QueueJobStatus,
 } from "../../server/index";
 import { useTokai } from "../provider";
+import { JobDetailsModal } from "./JobDetailsModal";
 
 const statusColors: Record<QueueJobStatus, string> = {
   completed: "#4ADE80",
@@ -66,6 +67,7 @@ export function Jobs() {
       showPreviousJobsPage,
       showNextJobsPage,
       filterJobsByStatus,
+      openJobDetails,
     },
   } = useTokai();
 
@@ -82,6 +84,7 @@ export function Jobs() {
       flexGrow={1}
       flexShrink={1}
       overflow="hidden"
+      position="relative"
       padding={2}
       flexDirection="column"
       gap={1}
@@ -227,6 +230,10 @@ export function Jobs() {
                 paddingLeft={1}
                 paddingRight={1}
                 flexDirection="column"
+                onMouseDown={() => {
+                  setIsStatusFilterOpen(false);
+                  void openJobDetails(job.id);
+                }}
               >
                 <box
                   width="100%"
@@ -250,7 +257,10 @@ export function Jobs() {
                       borderColor="#DC2626"
                       alignItems="center"
                       justifyContent="center"
-                      onMouseDown={() => deleteJob(job.id)}
+                      onMouseDown={(event) => {
+                        event.stopPropagation();
+                        void deleteJob(job.id);
+                      }}
                     >
                       <text fg="#FB7185">
                         {isDeleting ? "Deleting..." : "Delete"}
@@ -322,6 +332,8 @@ export function Jobs() {
           {jobsMessage}
         </text>
       ) : null}
+
+      <JobDetailsModal />
     </box>
   );
 }

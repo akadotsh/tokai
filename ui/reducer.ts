@@ -1,5 +1,6 @@
 import type {
   JobCounts,
+  QueueJobDetails,
   QueueJobStatus,
   QueueJobsPage,
   QueueJobSummary,
@@ -18,6 +19,10 @@ export type AppState = {
   jobsMessage: string;
   isLoadingJobs: boolean;
   deletingJobId: string | null;
+  selectedJobId: string | null;
+  selectedJobDetails: QueueJobDetails | null;
+  isLoadingJobDetails: boolean;
+  jobDetailsMessage: string;
   isAddJobScreenOpen: boolean;
   newJobName: string;
   newJobData: string;
@@ -56,6 +61,10 @@ export type AppAction =
   | { type: "jobDeleteStarted"; jobId: string }
   | { type: "jobDeleted"; jobId: string }
   | { type: "jobDeleteFailed"; jobId: string; message: string }
+  | { type: "jobDetailsLoading"; jobId: string }
+  | { type: "jobDetailsLoaded"; jobId: string; details: QueueJobDetails }
+  | { type: "jobDetailsFailed"; jobId: string; message: string }
+  | { type: "jobDetailsClosed" }
   | { type: "addJobScreenOpened" }
   | { type: "addJobScreenClosed" }
   | { type: "newJobNameChanged"; value: string }
@@ -80,6 +89,10 @@ export function createInitialState(isConnected: boolean): AppState {
     jobsMessage: "",
     isLoadingJobs: false,
     deletingJobId: null,
+    selectedJobId: null,
+    selectedJobDetails: null,
+    isLoadingJobDetails: false,
+    jobDetailsMessage: "",
     isAddJobScreenOpen: false,
     newJobName: "",
     newJobData: "{}",
@@ -194,6 +207,10 @@ export function reducer(state: AppState, action: AppAction): AppState {
         jobsStatusFilter: null,
         jobsMessage: "",
         isLoadingJobs: false,
+        selectedJobId: null,
+        selectedJobDetails: null,
+        isLoadingJobDetails: false,
+        jobDetailsMessage: "",
         isAddJobScreenOpen: false,
         newJobName: "",
         newJobData: "{}",
@@ -211,6 +228,10 @@ export function reducer(state: AppState, action: AppAction): AppState {
         jobsMessage: "",
         isLoadingJobs: false,
         deletingJobId: null,
+        selectedJobId: null,
+        selectedJobDetails: null,
+        isLoadingJobDetails: false,
+        jobDetailsMessage: "",
         isAddJobScreenOpen: false,
         newJobName: "",
         newJobData: "{}",
@@ -225,6 +246,10 @@ export function reducer(state: AppState, action: AppAction): AppState {
         jobs: state.jobs.filter((job) => job.id !== action.jobId),
         jobsTotal: Math.max(0, state.jobsTotal - 1),
         deletingJobId: null,
+        selectedJobId: null,
+        selectedJobDetails: null,
+        isLoadingJobDetails: false,
+        jobDetailsMessage: "",
         jobsMessage: `Deleted job "${action.jobId}".`,
       };
     case "jobDeleteFailed":
@@ -233,6 +258,36 @@ export function reducer(state: AppState, action: AppAction): AppState {
         ...state,
         deletingJobId: null,
         jobsMessage: action.message,
+      };
+    case "jobDetailsLoading":
+      return {
+        ...state,
+        selectedJobId: action.jobId,
+        selectedJobDetails: null,
+        isLoadingJobDetails: true,
+        jobDetailsMessage: "",
+      };
+    case "jobDetailsLoaded":
+      if (state.selectedJobId !== action.jobId) return state;
+      return {
+        ...state,
+        selectedJobDetails: action.details,
+        isLoadingJobDetails: false,
+      };
+    case "jobDetailsFailed":
+      if (state.selectedJobId !== action.jobId) return state;
+      return {
+        ...state,
+        isLoadingJobDetails: false,
+        jobDetailsMessage: action.message,
+      };
+    case "jobDetailsClosed":
+      return {
+        ...state,
+        selectedJobId: null,
+        selectedJobDetails: null,
+        isLoadingJobDetails: false,
+        jobDetailsMessage: "",
       };
     case "addJobScreenOpened":
       return {
@@ -287,6 +342,10 @@ export function reducer(state: AppState, action: AppAction): AppState {
         jobsTotal: 0,
         hasNextJobsPage: false,
         jobsStatusFilter: null,
+        selectedJobId: null,
+        selectedJobDetails: null,
+        isLoadingJobDetails: false,
+        jobDetailsMessage: "",
         isObliteratingQueue: false,
         message: `Obliterated queue "${action.queue.name}".`,
       };

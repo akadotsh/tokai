@@ -26,6 +26,8 @@ type TokaiActions = {
   showPreviousJobsPage: () => Promise<void>;
   showNextJobsPage: () => Promise<void>;
   showQueues: () => void;
+  openJobDetails: (jobId: string) => Promise<void>;
+  closeJobDetails: () => void;
   deleteJob: (jobId: string) => Promise<void>;
   openAddJob: () => void;
   closeAddJob: () => void;
@@ -269,6 +271,25 @@ export function TokaiProvider({ children }: PropsWithChildren) {
     void fetchQueues();
   };
 
+  const openJobDetails = async (jobId: string) => {
+    if (!selectedQueue || deletingJobId || isObliteratingQueue) return;
+
+    const queue = selectedQueue;
+    dispatch({ type: "jobDetailsLoading", jobId });
+
+    try {
+      const details = await redisConnection.getQueueJobDetails(queue, jobId);
+      dispatch({ type: "jobDetailsLoaded", jobId, details });
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : "Unknown error";
+      dispatch({
+        type: "jobDetailsFailed",
+        jobId,
+        message: `Could not fetch job details: ${reason}`,
+      });
+    }
+  };
+
   const deleteJob = async (jobId: string) => {
     if (
       !selectedQueue ||
@@ -369,6 +390,8 @@ export function TokaiProvider({ children }: PropsWithChildren) {
     showPreviousJobsPage,
     showNextJobsPage,
     showQueues,
+    openJobDetails,
+    closeJobDetails: () => dispatch({ type: "jobDetailsClosed" }),
     deleteJob,
     openAddJob: () => dispatch({ type: "addJobScreenOpened" }),
     closeAddJob: () => dispatch({ type: "addJobScreenClosed" }),

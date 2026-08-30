@@ -44,6 +44,29 @@ export type QueueJobsPage = {
   hasNextPage: boolean;
 };
 
+export type QueueJobDetails = {
+  id: string;
+  name: string;
+  state: string;
+  data: unknown;
+  options: unknown;
+  progress: unknown;
+  returnValue: unknown;
+  failedReason: string | null;
+  stackTrace: string[];
+  attemptsMade: number;
+  attemptsStarted: number;
+  stalledCounter: number;
+  delay: number;
+  priority: number;
+  timestamp: number;
+  processedOn: number | null;
+  finishedOn: number | null;
+  processedBy: string | null;
+  logs: string[];
+  logsCount: number;
+};
+
 export const queueJobStatuses: QueueJobStatus[] = [
   "completed",
   "failed",
@@ -271,6 +294,56 @@ class RedisConnection {
       if (removed === 0) {
         throw new Error(`Job "${jobId}" was not found or is currently locked.`);
       }
+    } finally {
+      await queue.close();
+    }
+  }
+
+  async getQueueJobDetails(queueRef: QueueRef, jobId: string) {
+    if (!this.connection) {
+      throw new Error("Connect to Redis before fetching job details.");
+    }
+
+    const queue = new Queue(queueRef.name, {
+      connection: this.connection.duplicate(),
+      prefix: queueRef.prefix,
+      skipMetasUpdate: true,
+    });
+
+    try {
+      const job = await queue.getJob(jobId);
+
+      if (!job) {
+        throw new Error(`Job "${jobId}" was not found.`);
+      }
+
+      const [state, jobLogs] = await Promise.all([
+        job.getState(),
+        queue.getJobLogs(jobId, 0, -1, true),
+      ]);
+
+      return {
+        id: job.id ?? jobId,
+        name: job.name,
+        state,
+        data: job.data,
+        options: job.opts,
+        progress: job.progress,
+        returnValue: job.returnvalue,
+        failedReason: job.failedReason || null,
+        stackTrace: job.stacktrace ?? [],
+        attemptsMade: job.attemptsMade,
+        attemptsStarted: job.attemptsStarted,
+        stalledCounter: job.stalledCounter,
+        delay: job.delay,
+        priority: job.priority,
+        timestamp: job.timestamp,
+        processedOn: job.processedOn ?? null,
+        finishedOn: job.finishedOn ?? null,
+        processedBy: job.processedBy ?? null,
+        logs: jobLogs.logs,
+        logsCount: jobLogs.count,
+      } satisfies QueueJobDetails;
     } finally {
       await queue.close();
     }
