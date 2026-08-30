@@ -77,15 +77,15 @@ export function reducer(state: AppState, action: AppAction): AppState {
     case "disconnected":
       return createInitialState(false);
     case "queuesLoading":
-      return { ...state, message: "Scanning for BullMQ queues..." };
+      return { ...state, message: "Scanning for queues..." };
     case "queuesLoaded":
       return {
         ...state,
         queues: action.queues,
         message:
           action.queues.length === 0
-            ? "No BullMQ queues found."
-            : `Found ${action.queues.length} BullMQ queue${action.queues.length === 1 ? "" : "s"}.`,
+            ? "No queues found."
+            : `Found ${action.queues.length} Queue${action.queues.length === 1 ? "" : "s"}.`,
       };
     case "queuesFailed":
       return { ...state, message: action.message };

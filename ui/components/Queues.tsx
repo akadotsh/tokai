@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useTokai } from "../provider";
 
 function getMessageColor(message: string) {
@@ -17,19 +18,26 @@ function getMessageColor(message: string) {
 }
 
 export function Queues() {
+  const [searchQuery, setSearchQuery] = useState("");
   const {
     state: { queues, message },
     actions: { fetchQueues, fetchJobs },
   } = useTokai();
+  const normalizedSearchQuery = searchQuery.trim().toLowerCase();
+  const filteredQueues = normalizedSearchQuery
+    ? queues.filter((queue) =>
+        queue.name.toLowerCase().includes(normalizedSearchQuery),
+      )
+    : queues;
   const queueRows = Array.from(
-    { length: Math.ceil(queues.length / 2) },
-    (_, index) => queues.slice(index * 2, index * 2 + 2),
+    { length: Math.ceil(filteredQueues.length / 2) },
+    (_, index) => filteredQueues.slice(index * 2, index * 2 + 2),
   );
 
   return (
     <box flexGrow={1} padding={2} flexDirection="column" gap={1}>
       <box flexDirection="row" alignItems="center" gap={2}>
-        <text fg="#C7D2E9">BullMQ queues ({queues.length})</text>
+        <text fg="#C7D2E9">Queues ({queues.length})</text>
         <box
           width={12}
           height={3}
@@ -40,6 +48,24 @@ export function Queues() {
         >
           <text fg="#FFFFFF">Refresh</text>
         </box>
+      </box>
+
+      <box
+        width="100%"
+        height={3}
+        border
+        borderColor="#3B82F6"
+        paddingLeft={1}
+        paddingRight={1}
+      >
+        <input
+          value={searchQuery}
+          placeholder="Filter queues..."
+          placeholderColor="#59677F"
+          textColor="#F3F6FF"
+          focused
+          onInput={setSearchQuery}
+        />
       </box>
 
       <box width="100%" flexDirection="column" gap={1}>
@@ -96,6 +122,9 @@ export function Queues() {
             ))}
           </box>
         ))}
+        {queues.length > 0 && filteredQueues.length === 0 ? (
+          <text fg="#8290AA">No queues match "{searchQuery.trim()}".</text>
+        ) : null}
       </box>
 
       {message ? <text fg={getMessageColor(message)}>{message}</text> : null}
