@@ -35,6 +35,14 @@ export type QueueJobSummary = {
   data: unknown;
 };
 
+export type QueueJobsPage = {
+  jobs: QueueJobSummary[];
+  page: number;
+  pageSize: number;
+  total: number;
+  hasNextPage: boolean;
+};
+
 const queueJobStatuses: QueueJobStatus[] = [
   "completed",
   "failed",
@@ -160,9 +168,17 @@ class RedisConnection {
     }
   }
 
-  async getQueueJobs(queueRef: QueueRef) {
+  async getQueueJobs(queueRef: QueueRef, page: number, pageSize: number) {
     if (!this.connection) {
       throw new Error("Connect to Redis before fetching jobs.");
+    }
+
+    if (!Number.isInteger(page) || page < 1) {
+      throw new Error("Job page must be a positive integer.");
+    }
+
+    if (!Number.isInteger(pageSize) || pageSize < 1) {
+      throw new Error("Job page size must be a positive integer.");
     }
 
     const queue = new Queue(queueRef.name, {
@@ -185,10 +201,27 @@ class RedisConnection {
           data: unknown;
         }>
       >;
+      const getJobCounts = queue.getJobCounts.bind(queue) as (
+        ...types: QueueJobStatus[]
+      ) => Promise<Record<string, number>>;
+      const counts = await getJobCounts(...queueJobStatuses);
+      const total = queueJobStatuses.reduce(
+        (sum, status) => sum + (counts[status] ?? 0),
+        0,
+      );
+      const pageStart = (page - 1) * pageSize;
+      const pageEnd = pageStart + pageSize;
+      let statusStart = 0;
       const jobsByStatus = await Promise.all(
         queueJobStatuses.map(async (status) => {
-          const jobs = await getJobs([status], 0, 99, true);
-          console.log("JOBS", jobs);
+          const statusCount = counts[status] ?? 0;
+          const start = Math.max(0, pageStart - statusStart);
+          const end = Math.min(statusCount, pageEnd - statusStart) - 1;
+          statusStart += statusCount;
+
+          if (start > end) return [];
+
+          const jobs = await getJobs([status], start, end, true);
           return jobs.map(
             (job): QueueJobSummary => ({
               id: job.id ?? "(no id)",
@@ -201,7 +234,13 @@ class RedisConnection {
         }),
       );
 
-      return jobsByStatus.flat();
+      return {
+        jobs: jobsByStatus.flat(),
+        page,
+        pageSize,
+        total,
+        hasNextPage: pageEnd < total,
+      } satisfies QueueJobsPage;
     } finally {
       await queue.close();
     }

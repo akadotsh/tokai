@@ -33,15 +33,28 @@ export function Jobs() {
     state: {
       selectedQueue,
       jobs,
+      jobsPage,
+      jobsTotal,
+      hasNextJobsPage,
       isLoadingJobs,
       jobsMessage,
       deletingJobId,
       isObliteratingQueue,
     },
-    actions: { showQueues, deleteJob, openAddJob, obliterateQueue },
+    actions: {
+      showQueues,
+      deleteJob,
+      openAddJob,
+      obliterateQueue,
+      showPreviousJobsPage,
+      showNextJobsPage,
+    },
   } = useTokai();
 
   if (!selectedQueue) return null;
+
+  const canShowPreviousPage = jobsPage > 1 && !isLoadingJobs;
+  const canShowNextPage = hasNextJobsPage && !isLoadingJobs;
 
   return (
     <box
@@ -73,7 +86,7 @@ export function Jobs() {
             <text fg="#FFFFFF">← Back</text>
           </box>
           <text fg="#F3F6FF">
-            {selectedQueue.name} · {jobs.length} jobs
+            {selectedQueue.name} · {jobsTotal} jobs
           </text>
         </box>
         <box flexDirection="row" alignItems="center" gap={1}>
@@ -107,7 +120,7 @@ export function Jobs() {
           <text fg="#FACC15">◌ Loading jobs...</text>
         </box>
       ) : jobs.length === 0 ? (
-        <text fg="#8290AA">No jobs found in the first 100 per status.</text>
+        <text fg="#8290AA">No jobs found on this page.</text>
       ) : (
         <scrollbox
           width="80%"
@@ -181,6 +194,43 @@ export function Jobs() {
           })}
         </scrollbox>
       )}
+
+      <box
+        width="80%"
+        alignSelf="center"
+        flexDirection="row"
+        alignItems="center"
+        justifyContent="center"
+        gap={2}
+      >
+        <box
+          width={14}
+          height={3}
+          border
+          borderColor={canShowPreviousPage ? "#3B82F6" : "#253552"}
+          alignItems="center"
+          justifyContent="center"
+          onMouseDown={showPreviousJobsPage}
+        >
+          <text fg={canShowPreviousPage ? "#FFFFFF" : "#59677F"}>
+            ← Previous
+          </text>
+        </box>
+        <box width={10} height={3} alignItems="center" justifyContent="center">
+          <text fg="#8EA2C9">Page {jobsPage}</text>
+        </box>
+        <box
+          width={14}
+          height={3}
+          border
+          borderColor={canShowNextPage ? "#3B82F6" : "#253552"}
+          alignItems="center"
+          justifyContent="center"
+          onMouseDown={showNextJobsPage}
+        >
+          <text fg={canShowNextPage ? "#FFFFFF" : "#59677F"}>Next →</text>
+        </box>
+      </box>
 
       {!isLoadingJobs && jobsMessage ? (
         <text

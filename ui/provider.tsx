@@ -13,7 +13,9 @@ type TokaiActions = {
   connect: () => Promise<void>;
   disconnect: () => Promise<void>;
   fetchQueues: () => Promise<void>;
-  fetchJobs: (queue: QueueRef) => Promise<void>;
+  fetchJobs: (queue: QueueRef, page?: number) => Promise<void>;
+  showPreviousJobsPage: () => Promise<void>;
+  showNextJobsPage: () => Promise<void>;
   showQueues: () => void;
   deleteJob: (jobId: string) => Promise<void>;
   openAddJob: () => void;
@@ -31,6 +33,7 @@ type TokaiContextValue = {
 
 const TokaiContext = createContext<TokaiContextValue | null>(null);
 const POLL_INTERVAL_MS = 5_000;
+const JOBS_PAGE_SIZE = 10;
 
 export function TokaiProvider({ children }: PropsWithChildren) {
   const [state, dispatch] = useReducer(
@@ -41,6 +44,9 @@ export function TokaiProvider({ children }: PropsWithChildren) {
   const {
     redisUrl,
     selectedQueue,
+    jobsPage,
+    hasNextJobsPage,
+    isLoadingJobs,
     deletingJobId,
     newJobName,
     newJobData,
@@ -54,7 +60,8 @@ export function TokaiProvider({ children }: PropsWithChildren) {
       !isConnected ||
       deletingJobId ||
       isAddingJob ||
-      isObliteratingQueue
+      isObliteratingQueue ||
+      isLoadingJobs
     ) {
       return;
     }
@@ -84,10 +91,14 @@ export function TokaiProvider({ children }: PropsWithChildren) {
             return;
           }
 
-          const jobs = await redisConnection.getQueueJobs(selectedQueue);
+          const result = await redisConnection.getQueueJobs(
+            selectedQueue,
+            jobsPage,
+            JOBS_PAGE_SIZE,
+          );
 
           if (isActive) {
-            dispatch({ type: "jobsRefreshed", queue: selectedQueue, jobs });
+            dispatch({ type: "jobsRefreshed", queue: selectedQueue, result });
           }
         }
       } catch {
@@ -107,7 +118,9 @@ export function TokaiProvider({ children }: PropsWithChildren) {
     deletingJobId,
     isAddingJob,
     isConnected,
+    isLoadingJobs,
     isObliteratingQueue,
+    jobsPage,
     selectedQueue?.name,
     selectedQueue?.prefix,
   ]);
@@ -169,20 +182,53 @@ export function TokaiProvider({ children }: PropsWithChildren) {
     }
   };
 
-  const fetchJobs = async (queue: QueueRef) => {
-    dispatch({ type: "jobsLoading", queue });
+  const fetchJobs = async (queue: QueueRef, page = 1) => {
+    dispatch({ type: "jobsLoading", queue, page });
 
     try {
-      const jobs = await redisConnection.getQueueJobs(queue);
-      dispatch({ type: "jobsLoaded", queue, jobs });
+      const result = await redisConnection.getQueueJobs(
+        queue,
+        page,
+        JOBS_PAGE_SIZE,
+      );
+      dispatch({ type: "jobsLoaded", queue, result });
     } catch (error) {
       const reason = error instanceof Error ? error.message : "Unknown error";
       dispatch({
         type: "jobsFailed",
         queue,
+        page,
         message: `Could not fetch jobs: ${reason}`,
       });
     }
+  };
+
+  const showPreviousJobsPage = async () => {
+    if (
+      !selectedQueue ||
+      jobsPage <= 1 ||
+      isLoadingJobs ||
+      deletingJobId ||
+      isAddingJob ||
+      isObliteratingQueue
+    ) {
+      return;
+    }
+    await fetchJobs(selectedQueue, jobsPage - 1);
+  };
+
+  const showNextJobsPage = async () => {
+    if (
+      !selectedQueue ||
+      !hasNextJobsPage ||
+      isLoadingJobs ||
+      deletingJobId ||
+      isAddingJob ||
+      isObliteratingQueue
+    ) {
+      return;
+    }
+    await fetchJobs(selectedQueue, jobsPage + 1);
   };
 
   const showQueues = () => {
@@ -286,6 +332,8 @@ export function TokaiProvider({ children }: PropsWithChildren) {
     disconnect,
     fetchQueues,
     fetchJobs,
+    showPreviousJobsPage,
+    showNextJobsPage,
     showQueues,
     deleteJob,
     openAddJob: () => dispatch({ type: "addJobScreenOpened" }),
