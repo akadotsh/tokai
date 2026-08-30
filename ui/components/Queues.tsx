@@ -45,14 +45,14 @@ export function Queues() {
       <box width="100%" flexDirection="column" gap={1}>
         {queueRows.map((row, rowIndex) => (
           <box
-            key={row[0]?.name ?? rowIndex}
+            key={row[0] ? `${row[0].prefix}:${row[0].name}` : rowIndex}
             width="100%"
             flexDirection="row"
             justifyContent="space-between"
           >
-            {row.map(({ name, meta, counts }) => (
+            {row.map(({ name, prefix, meta, counts }) => (
               <box
-                key={name}
+                key={`${prefix}:${name}`}
                 width="49%"
                 height={8}
                 border
@@ -60,7 +60,7 @@ export function Queues() {
                 paddingLeft={1}
                 paddingRight={1}
                 flexDirection="column"
-                onMouseDown={() => fetchJobs(name)}
+                onMouseDown={() => fetchJobs({ name, prefix })}
               >
                 <box
                   width="100%"

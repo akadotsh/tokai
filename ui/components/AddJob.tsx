@@ -40,7 +40,7 @@ export function AddJob() {
         >
           <text fg="#FFFFFF">← Back</text>
         </box>
-        <text fg="#F3F6FF">Add job to {selectedQueue}</text>
+        <text fg="#F3F6FF">Add job to {selectedQueue.name}</text>
       </box>
 
       <box

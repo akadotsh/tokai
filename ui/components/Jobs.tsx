@@ -73,7 +73,7 @@ export function Jobs() {
             <text fg="#FFFFFF">← Back</text>
           </box>
           <text fg="#F3F6FF">
-            {selectedQueue} · {jobs.length} jobs
+            {selectedQueue.name} · {jobs.length} jobs
           </text>
         </box>
         <box flexDirection="row" alignItems="center" gap={1}>

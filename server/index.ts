@@ -6,8 +6,12 @@ import {
   type QueueMeta,
 } from "bullmq";
 
-export type JobCounts = {
+export type QueueRef = {
   name: string;
+  prefix: string;
+};
+
+export type JobCounts = QueueRef & {
   meta: QueueMeta;
   counts: Record<QueueJobStatus, number>;
 };
@@ -60,7 +64,7 @@ class RedisConnection {
   }
 
   async disconnect() {
-    await this.connection?.disconnect();
+    this.connection?.disconnect();
     this.connection = null;
     this.isConnected = false;
     console.log("Disconnected");
@@ -71,49 +75,56 @@ class RedisConnection {
       throw new Error("Connect to Redis before scanning for queues.");
     }
 
-    const queues = new Set<string>();
+    const queues = new Map<string, QueueRef>();
     let cursor = "0";
 
     do {
       const [nextCursor, keys] = await this.connection.scan(cursor, {
-        MATCH: "bull:*:meta",
+        MATCH: "*:*:meta",
         COUNT: 100,
       });
 
       cursor = nextCursor;
 
       for (const key of keys) {
-        const match = key.match(/^bull:(.+):meta$/);
+        const match = key.match(/^(.+):([^:]+):meta$/);
 
-        if (match?.[1]) {
-          queues.add(match[1]);
+        if (match?.[1] && match[2]) {
+          const prefix = match[1];
+          const name = match[2];
+          queues.set(`${prefix}:${name}`, { prefix, name });
         }
       }
     } while (cursor !== "0");
 
-    const queueNames = [...queues].sort();
+    const queueRefs = [...queues.values()].sort(
+      (left, right) =>
+        left.prefix.localeCompare(right.prefix) ||
+        left.name.localeCompare(right.name),
+    );
 
     const jobCounts: JobCounts[] = await Promise.all(
-      queueNames.map(async (name) => {
+      queueRefs.map(async (queue) => {
         const [meta, counts] = await Promise.all([
-          this.getQueueMeta(name),
-          this.getQueueJobCounts(name),
+          this.getQueueMeta(queue),
+          this.getQueueJobCounts(queue),
         ]);
 
-        return { name, meta, counts };
+        return { ...queue, meta, counts };
       }),
     );
 
     return jobCounts;
   }
 
-  async getQueueMeta(queueName: string) {
+  async getQueueMeta(queueRef: QueueRef) {
     if (!this.connection) {
       throw new Error("Connect to Redis before fetching queue meta.");
     }
 
-    const queue = new Queue(queueName, {
+    const queue = new Queue(queueRef.name, {
       connection: this.connection.duplicate(),
+      prefix: queueRef.prefix,
       skipMetasUpdate: true,
     });
 
@@ -124,13 +135,14 @@ class RedisConnection {
     }
   }
 
-  async getQueueJobCounts(queueName: string) {
+  async getQueueJobCounts(queueRef: QueueRef) {
     if (!this.connection) {
       throw new Error("Connect to Redis before fetching job counts.");
     }
 
-    const queue = new Queue(queueName, {
+    const queue = new Queue(queueRef.name, {
       connection: this.connection.duplicate(),
+      prefix: queueRef.prefix,
       skipMetasUpdate: true,
     });
 
@@ -148,13 +160,14 @@ class RedisConnection {
     }
   }
 
-  async getQueueJobs(queueName: string) {
+  async getQueueJobs(queueRef: QueueRef) {
     if (!this.connection) {
       throw new Error("Connect to Redis before fetching jobs.");
     }
 
-    const queue = new Queue(queueName, {
+    const queue = new Queue(queueRef.name, {
       connection: this.connection.duplicate(),
+      prefix: queueRef.prefix,
       skipMetasUpdate: true,
     });
 
@@ -194,13 +207,14 @@ class RedisConnection {
     }
   }
 
-  async removeQueueJob(queueName: string, jobId: string) {
+  async removeQueueJob(queueRef: QueueRef, jobId: string) {
     if (!this.connection) {
       throw new Error("Connect to Redis before deleting a job.");
     }
 
-    const queue = new Queue(queueName, {
+    const queue = new Queue(queueRef.name, {
       connection: this.connection.duplicate(),
+      prefix: queueRef.prefix,
       skipMetasUpdate: true,
     });
 
@@ -215,13 +229,14 @@ class RedisConnection {
     }
   }
 
-  async addQueueJob(queueName: string, name: string, data: unknown) {
+  async addQueueJob(queueRef: QueueRef, name: string, data: unknown) {
     if (!this.connection) {
       throw new Error("Connect to Redis before adding a job.");
     }
 
-    const queue = new Queue(queueName, {
+    const queue = new Queue(queueRef.name, {
       connection: this.connection.duplicate(),
+      prefix: queueRef.prefix,
       skipMetasUpdate: true,
     });
 
@@ -240,13 +255,14 @@ class RedisConnection {
     }
   }
 
-  async obliterateQueue(queueName: string) {
+  async obliterateQueue(queueRef: QueueRef) {
     if (!this.connection) {
       throw new Error("Connect to Redis before obliterating a queue.");
     }
 
-    const queue = new Queue(queueName, {
+    const queue = new Queue(queueRef.name, {
       connection: this.connection.duplicate(),
+      prefix: queueRef.prefix,
       skipMetasUpdate: true,
     });
 

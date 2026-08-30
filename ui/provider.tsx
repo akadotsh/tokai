@@ -4,7 +4,7 @@ import {
   useReducer,
   type PropsWithChildren,
 } from "react";
-import { redisConnection } from "../server/index";
+import { redisConnection, type QueueRef } from "../server/index";
 import { createInitialState, reducer, type AppState } from "./reducer";
 
 type TokaiActions = {
@@ -12,7 +12,7 @@ type TokaiActions = {
   connect: () => Promise<void>;
   disconnect: () => Promise<void>;
   fetchQueues: () => Promise<void>;
-  fetchJobs: (queueName: string) => Promise<void>;
+  fetchJobs: (queue: QueueRef) => Promise<void>;
   showQueues: () => void;
   deleteJob: (jobId: string) => Promise<void>;
   openAddJob: () => void;
@@ -103,17 +103,17 @@ export function TokaiProvider({ children }: PropsWithChildren) {
     }
   };
 
-  const fetchJobs = async (queueName: string) => {
-    dispatch({ type: "jobsLoading", queueName });
+  const fetchJobs = async (queue: QueueRef) => {
+    dispatch({ type: "jobsLoading", queue });
 
     try {
-      const jobs = await redisConnection.getQueueJobs(queueName);
-      dispatch({ type: "jobsLoaded", queueName, jobs });
+      const jobs = await redisConnection.getQueueJobs(queue);
+      dispatch({ type: "jobsLoaded", queue, jobs });
     } catch (error) {
       const reason = error instanceof Error ? error.message : "Unknown error";
       dispatch({
         type: "jobsFailed",
-        queueName,
+        queue,
         message: `Could not fetch jobs: ${reason}`,
       });
     }
@@ -199,12 +199,12 @@ export function TokaiProvider({ children }: PropsWithChildren) {
       return;
     }
 
-    const queueName = selectedQueue;
+    const queue = selectedQueue;
     dispatch({ type: "queueObliterateStarted" });
 
     try {
-      await redisConnection.obliterateQueue(queueName);
-      dispatch({ type: "queueObliterated", queueName });
+      await redisConnection.obliterateQueue(queue);
+      dispatch({ type: "queueObliterated", queue });
     } catch (error) {
       const reason = error instanceof Error ? error.message : "Unknown error";
       dispatch({

@@ -1,9 +1,9 @@
-import type { JobCounts, QueueJobSummary } from "../server/index";
+import type { JobCounts, QueueJobSummary, QueueRef } from "../server/index";
 
 export type AppState = {
   redisUrl: string;
   queues: JobCounts[];
-  selectedQueue: string | null;
+  selectedQueue: QueueRef | null;
   jobs: QueueJobSummary[];
   jobsMessage: string;
   isLoadingJobs: boolean;
@@ -25,9 +25,9 @@ export type AppAction =
   | { type: "queuesLoading" }
   | { type: "queuesLoaded"; queues: JobCounts[] }
   | { type: "queuesFailed"; message: string }
-  | { type: "jobsLoading"; queueName: string }
-  | { type: "jobsLoaded"; queueName: string; jobs: QueueJobSummary[] }
-  | { type: "jobsFailed"; queueName: string; message: string }
+  | { type: "jobsLoading"; queue: QueueRef }
+  | { type: "jobsLoaded"; queue: QueueRef; jobs: QueueJobSummary[] }
+  | { type: "jobsFailed"; queue: QueueRef; message: string }
   | { type: "showQueues" }
   | { type: "jobDeleteStarted"; jobId: string }
   | { type: "jobDeleted"; jobId: string }
@@ -40,7 +40,7 @@ export type AppAction =
   | { type: "jobAdded"; job: QueueJobSummary }
   | { type: "jobAddFailed"; message: string }
   | { type: "queueObliterateStarted" }
-  | { type: "queueObliterated"; queueName: string }
+  | { type: "queueObliterated"; queue: QueueRef }
   | { type: "queueObliterateFailed"; message: string };
 
 export function createInitialState(isConnected: boolean): AppState {
@@ -60,6 +60,10 @@ export function createInitialState(isConnected: boolean): AppState {
     message: "",
     isConnected,
   };
+}
+
+function isSameQueue(left: QueueRef | null, right: QueueRef) {
+  return left?.name === right.name && left.prefix === right.prefix;
 }
 
 export function reducer(state: AppState, action: AppAction): AppState {
@@ -88,7 +92,7 @@ export function reducer(state: AppState, action: AppAction): AppState {
     case "jobsLoading":
       return {
         ...state,
-        selectedQueue: action.queueName,
+        selectedQueue: action.queue,
         jobs: [],
         jobsMessage: "",
         isLoadingJobs: true,
@@ -98,10 +102,10 @@ export function reducer(state: AppState, action: AppAction): AppState {
         isAddingJob: false,
       };
     case "jobsLoaded":
-      if (state.selectedQueue !== action.queueName) return state;
+      if (!isSameQueue(state.selectedQueue, action.queue)) return state;
       return { ...state, jobs: action.jobs, isLoadingJobs: false };
     case "jobsFailed":
-      if (state.selectedQueue !== action.queueName) return state;
+      if (!isSameQueue(state.selectedQueue, action.queue)) return state;
       return {
         ...state,
         jobsMessage: action.message,
@@ -177,11 +181,13 @@ export function reducer(state: AppState, action: AppAction): AppState {
     case "queueObliterated":
       return {
         ...state,
-        queues: state.queues.filter((queue) => queue.name !== action.queueName),
+        queues: state.queues.filter(
+          (queue) => !isSameQueue(queue, action.queue),
+        ),
         selectedQueue: null,
         jobs: [],
         isObliteratingQueue: false,
-        message: `Obliterated queue "${action.queueName}".`,
+        message: `Obliterated queue "${action.queue.name}".`,
       };
     case "queueObliterateFailed":
       return {
