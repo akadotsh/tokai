@@ -93,7 +93,7 @@ export function JobDetailsModal() {
       width="100%"
       height="100%"
       zIndex={10_000}
-      backgroundColor="#05070D"
+      backgroundColor="#05070DB3"
       alignItems="center"
       justifyContent="center"
     >
