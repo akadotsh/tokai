@@ -410,6 +410,28 @@ class RedisConnection {
       await queue.close();
     }
   }
+
+  async rateLimitQueue(queueRef: QueueRef, durationMs: number) {
+    if (!this.connection) {
+      throw new Error("Connect to Redis before rate limiting a queue.");
+    }
+
+    if (!Number.isInteger(durationMs) || durationMs <= 0) {
+      throw new Error("Rate limit duration must be a positive integer.");
+    }
+
+    const queue = new Queue(queueRef.name, {
+      connection: this.connection.duplicate(),
+      prefix: queueRef.prefix,
+      skipMetasUpdate: true,
+    });
+
+    try {
+      await queue.rateLimit(durationMs);
+    } finally {
+      await queue.close();
+    }
+  }
 }
 
 export const redisConnection = new RedisConnection();

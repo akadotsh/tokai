@@ -35,6 +35,7 @@ type TokaiActions = {
   setNewJobData: (value: string) => void;
   addJob: () => Promise<void>;
   drainQueue: () => Promise<void>;
+  rateLimitQueue: (durationMs: number) => Promise<void>;
   obliterateQueue: () => Promise<void>;
 };
 
@@ -65,6 +66,7 @@ export function TokaiProvider({ children }: PropsWithChildren) {
     newJobData,
     isAddingJob,
     isDrainingQueue,
+    isRateLimitingQueue,
     isObliteratingQueue,
     isConnected,
   } = state;
@@ -429,6 +431,33 @@ export function TokaiProvider({ children }: PropsWithChildren) {
     }
   };
 
+  const rateLimitQueue = async (durationMs: number) => {
+    if (
+      !selectedQueue ||
+      isRateLimitingQueue ||
+      isDrainingQueue ||
+      isObliteratingQueue ||
+      deletingJobId ||
+      isAddingJob
+    ) {
+      return;
+    }
+
+    const queue = selectedQueue;
+    dispatch({ type: "queueRateLimitStarted" });
+
+    try {
+      await redisConnection.rateLimitQueue(queue, durationMs);
+      dispatch({ type: "queueRateLimited", queue, durationMs });
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : "Unknown error";
+      dispatch({
+        type: "queueRateLimitFailed",
+        message: `Could not rate limit queue: ${reason}`,
+      });
+    }
+  };
+
   const actions: TokaiActions = {
     setRedisUrl: (value) => dispatch({ type: "redisUrlChanged", value }),
     connect,
@@ -448,6 +477,7 @@ export function TokaiProvider({ children }: PropsWithChildren) {
     setNewJobData: (value) => dispatch({ type: "newJobDataChanged", value }),
     addJob,
     drainQueue,
+    rateLimitQueue,
     obliterateQueue,
   };
 

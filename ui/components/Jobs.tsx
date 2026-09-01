@@ -7,6 +7,7 @@ import {
 import { useTokai } from "../provider";
 import { ConfirmationDialog } from "./ConfirmationDialog";
 import { JobDetailsModal } from "./JobDetailsModal";
+import { RateLimitDialog } from "./RateLimitDialog";
 
 const statusColors: Record<QueueJobStatus, string> = {
   completed: "#4ADE80",
@@ -48,6 +49,9 @@ function formatJobData(data: unknown) {
 export function Jobs() {
   const [isStatusFilterOpen, setIsStatusFilterOpen] = useState(false);
   const [isQueueOptionsOpen, setIsQueueOptionsOpen] = useState(false);
+  const [isRateLimitDialogOpen, setIsRateLimitDialogOpen] = useState(false);
+  const [rateLimitDuration, setRateLimitDuration] = useState("");
+  const [rateLimitError, setRateLimitError] = useState("");
   const [isDrainConfirmationOpen, setIsDrainConfirmationOpen] = useState(false);
   const [isObliterateConfirmationOpen, setIsObliterateConfirmationOpen] =
     useState(false);
@@ -63,6 +67,7 @@ export function Jobs() {
       jobsMessage,
       deletingJobId,
       isDrainingQueue,
+      isRateLimitingQueue,
       isObliteratingQueue,
     },
     actions: {
@@ -70,6 +75,7 @@ export function Jobs() {
       deleteJob,
       openAddJob,
       drainQueue,
+      rateLimitQueue,
       obliterateQueue,
       showPreviousJobsPage,
       showNextJobsPage,
@@ -82,6 +88,21 @@ export function Jobs() {
 
   const canShowPreviousPage = jobsPage > 1 && !isLoadingJobs;
   const canShowNextPage = hasNextJobsPage && !isLoadingJobs;
+
+  const confirmRateLimitQueue = async () => {
+    if (isRateLimitingQueue) return;
+
+    const durationMs = Number(rateLimitDuration);
+
+    if (!Number.isInteger(durationMs) || durationMs <= 0) {
+      setRateLimitError("Enter a positive whole number of milliseconds.");
+      return;
+    }
+
+    setRateLimitError("");
+    await rateLimitQueue(durationMs);
+    setIsRateLimitDialogOpen(false);
+  };
 
   const confirmDrainQueue = async () => {
     if (isDrainingQueue) return;
@@ -227,13 +248,28 @@ export function Jobs() {
                 right={0}
                 zIndex={2_000}
                 width={20}
-                height={5}
+                height={7}
                 border
                 borderColor="#253552"
                 backgroundColor="#000000"
                 flexDirection="column"
                 gap={1}
               >
+                <box
+                  width="100%"
+                  height={1}
+                  paddingLeft={1}
+                  paddingRight={1}
+                  alignItems="flex-start"
+                  onMouseDown={() => {
+                    setIsQueueOptionsOpen(false);
+                    setRateLimitDuration("");
+                    setRateLimitError("");
+                    setIsRateLimitDialogOpen(true);
+                  }}
+                >
+                  <text fg="#C7D2E9">Set rate limit</text>
+                </box>
                 <box
                   width="100%"
                   height={1}
@@ -396,7 +432,8 @@ export function Jobs() {
           fg={
             jobsMessage.startsWith("Deleted ") ||
             jobsMessage.startsWith("Added ") ||
-            jobsMessage.startsWith("Emptied ")
+            jobsMessage.startsWith("Emptied ") ||
+            jobsMessage.startsWith("Rate limited ")
               ? "#4ADE80"
               : "#FB7185"
           }
@@ -404,6 +441,20 @@ export function Jobs() {
           {jobsMessage}
         </text>
       ) : null}
+
+      <RateLimitDialog
+        isOpen={isRateLimitDialogOpen}
+        queueName={selectedQueue.name}
+        duration={rateLimitDuration}
+        error={rateLimitError}
+        isPending={isRateLimitingQueue}
+        onDurationChange={(value) => {
+          setRateLimitDuration(value);
+          setRateLimitError("");
+        }}
+        onCancel={() => setIsRateLimitDialogOpen(false)}
+        onConfirm={() => void confirmRateLimitQueue()}
+      />
 
       <ConfirmationDialog
         isOpen={isDrainConfirmationOpen}

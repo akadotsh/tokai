@@ -28,6 +28,7 @@ export type AppState = {
   newJobData: string;
   isAddingJob: boolean;
   isDrainingQueue: boolean;
+  isRateLimitingQueue: boolean;
   isObliteratingQueue: boolean;
   message: string;
   isConnected: boolean;
@@ -76,6 +77,9 @@ export type AppAction =
   | { type: "queueDrainStarted" }
   | { type: "queueDrained"; queue: QueueRef; result: QueueJobsPage }
   | { type: "queueDrainFailed"; message: string }
+  | { type: "queueRateLimitStarted" }
+  | { type: "queueRateLimited"; queue: QueueRef; durationMs: number }
+  | { type: "queueRateLimitFailed"; message: string }
   | { type: "queueObliterateStarted" }
   | { type: "queueObliterated"; queue: QueueRef }
   | { type: "queueObliterateFailed"; message: string };
@@ -102,6 +106,7 @@ export function createInitialState(isConnected: boolean): AppState {
     newJobData: "{}",
     isAddingJob: false,
     isDrainingQueue: false,
+    isRateLimitingQueue: false,
     isObliteratingQueue: false,
     message: "",
     isConnected,
@@ -242,6 +247,7 @@ export function reducer(state: AppState, action: AppAction): AppState {
         newJobData: "{}",
         isAddingJob: false,
         isDrainingQueue: false,
+        isRateLimitingQueue: false,
         isObliteratingQueue: false,
       };
     case "jobDeleteStarted":
@@ -351,6 +357,21 @@ export function reducer(state: AppState, action: AppAction): AppState {
       return {
         ...state,
         isDrainingQueue: false,
+        jobsMessage: action.message,
+      };
+    case "queueRateLimitStarted":
+      return { ...state, isRateLimitingQueue: true, jobsMessage: "" };
+    case "queueRateLimited":
+      if (!isSameQueue(state.selectedQueue, action.queue)) return state;
+      return {
+        ...state,
+        isRateLimitingQueue: false,
+        jobsMessage: `Rate limited queue "${action.queue.name}" for ${action.durationMs} ms.`,
+      };
+    case "queueRateLimitFailed":
+      return {
+        ...state,
+        isRateLimitingQueue: false,
         jobsMessage: action.message,
       };
     case "queueObliterateStarted":
