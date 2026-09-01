@@ -34,6 +34,7 @@ type TokaiActions = {
   setNewJobName: (value: string) => void;
   setNewJobData: (value: string) => void;
   addJob: () => Promise<void>;
+  drainQueue: () => Promise<void>;
   obliterateQueue: () => Promise<void>;
 };
 
@@ -63,6 +64,7 @@ export function TokaiProvider({ children }: PropsWithChildren) {
     newJobName,
     newJobData,
     isAddingJob,
+    isDrainingQueue,
     isObliteratingQueue,
     isConnected,
   } = state;
@@ -72,6 +74,7 @@ export function TokaiProvider({ children }: PropsWithChildren) {
       !isConnected ||
       deletingJobId ||
       isAddingJob ||
+      isDrainingQueue ||
       isObliteratingQueue ||
       isLoadingJobs
     ) {
@@ -131,6 +134,7 @@ export function TokaiProvider({ children }: PropsWithChildren) {
     deletingJobId,
     isAddingJob,
     isConnected,
+    isDrainingQueue,
     isLoadingJobs,
     isObliteratingQueue,
     jobsPage,
@@ -230,6 +234,7 @@ export function TokaiProvider({ children }: PropsWithChildren) {
       isLoadingJobs ||
       deletingJobId ||
       isAddingJob ||
+      isDrainingQueue ||
       isObliteratingQueue
     ) {
       return;
@@ -245,6 +250,7 @@ export function TokaiProvider({ children }: PropsWithChildren) {
       isLoadingJobs ||
       deletingJobId ||
       isAddingJob ||
+      isDrainingQueue ||
       isObliteratingQueue
     ) {
       return;
@@ -259,6 +265,7 @@ export function TokaiProvider({ children }: PropsWithChildren) {
       isLoadingJobs ||
       deletingJobId ||
       isAddingJob ||
+      isDrainingQueue ||
       isObliteratingQueue
     ) {
       return;
@@ -272,7 +279,14 @@ export function TokaiProvider({ children }: PropsWithChildren) {
   };
 
   const openJobDetails = async (jobId: string) => {
-    if (!selectedQueue || deletingJobId || isObliteratingQueue) return;
+    if (
+      !selectedQueue ||
+      deletingJobId ||
+      isDrainingQueue ||
+      isObliteratingQueue
+    ) {
+      return;
+    }
 
     const queue = selectedQueue;
     dispatch({ type: "jobDetailsLoading", jobId });
@@ -295,6 +309,7 @@ export function TokaiProvider({ children }: PropsWithChildren) {
       !selectedQueue ||
       deletingJobId ||
       isAddingJob ||
+      isDrainingQueue ||
       isObliteratingQueue
     ) {
       return;
@@ -320,6 +335,7 @@ export function TokaiProvider({ children }: PropsWithChildren) {
       !selectedQueue ||
       isAddingJob ||
       deletingJobId ||
+      isDrainingQueue ||
       isObliteratingQueue
     ) {
       return;
@@ -359,6 +375,7 @@ export function TokaiProvider({ children }: PropsWithChildren) {
     if (
       !selectedQueue ||
       isObliteratingQueue ||
+      isDrainingQueue ||
       deletingJobId ||
       isAddingJob
     ) {
@@ -376,6 +393,38 @@ export function TokaiProvider({ children }: PropsWithChildren) {
       dispatch({
         type: "queueObliterateFailed",
         message: `Could not obliterate queue: ${reason}`,
+      });
+    }
+  };
+
+  const drainQueue = async () => {
+    if (
+      !selectedQueue ||
+      isDrainingQueue ||
+      isObliteratingQueue ||
+      deletingJobId ||
+      isAddingJob
+    ) {
+      return;
+    }
+
+    const queue = selectedQueue;
+    dispatch({ type: "queueDrainStarted" });
+
+    try {
+      await redisConnection.drainQueue(queue);
+      const result = await redisConnection.getQueueJobs(
+        queue,
+        1,
+        JOBS_PAGE_SIZE,
+        jobsStatusFilter,
+      );
+      dispatch({ type: "queueDrained", queue, result });
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : "Unknown error";
+      dispatch({
+        type: "queueDrainFailed",
+        message: `Could not empty queue: ${reason}`,
       });
     }
   };
@@ -398,6 +447,7 @@ export function TokaiProvider({ children }: PropsWithChildren) {
     setNewJobName: (value) => dispatch({ type: "newJobNameChanged", value }),
     setNewJobData: (value) => dispatch({ type: "newJobDataChanged", value }),
     addJob,
+    drainQueue,
     obliterateQueue,
   };
 

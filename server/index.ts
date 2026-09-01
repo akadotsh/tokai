@@ -392,6 +392,24 @@ class RedisConnection {
       await queue.close();
     }
   }
+
+  async drainQueue(queueRef: QueueRef) {
+    if (!this.connection) {
+      throw new Error("Connect to Redis before emptying a queue.");
+    }
+
+    const queue = new Queue(queueRef.name, {
+      connection: this.connection.duplicate(),
+      prefix: queueRef.prefix,
+      skipMetasUpdate: true,
+    });
+
+    try {
+      await queue.drain(true);
+    } finally {
+      await queue.close();
+    }
+  }
 }
 
 export const redisConnection = new RedisConnection();

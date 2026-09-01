@@ -27,6 +27,7 @@ export type AppState = {
   newJobName: string;
   newJobData: string;
   isAddingJob: boolean;
+  isDrainingQueue: boolean;
   isObliteratingQueue: boolean;
   message: string;
   isConnected: boolean;
@@ -72,6 +73,9 @@ export type AppAction =
   | { type: "jobAddStarted" }
   | { type: "jobAdded"; job: QueueJobSummary }
   | { type: "jobAddFailed"; message: string }
+  | { type: "queueDrainStarted" }
+  | { type: "queueDrained"; queue: QueueRef; result: QueueJobsPage }
+  | { type: "queueDrainFailed"; message: string }
   | { type: "queueObliterateStarted" }
   | { type: "queueObliterated"; queue: QueueRef }
   | { type: "queueObliterateFailed"; message: string };
@@ -97,6 +101,7 @@ export function createInitialState(isConnected: boolean): AppState {
     newJobName: "",
     newJobData: "{}",
     isAddingJob: false,
+    isDrainingQueue: false,
     isObliteratingQueue: false,
     message: "",
     isConnected,
@@ -236,6 +241,7 @@ export function reducer(state: AppState, action: AppAction): AppState {
         newJobName: "",
         newJobData: "{}",
         isAddingJob: false,
+        isDrainingQueue: false,
         isObliteratingQueue: false,
       };
     case "jobDeleteStarted":
@@ -328,6 +334,25 @@ export function reducer(state: AppState, action: AppAction): AppState {
       };
     case "jobAddFailed":
       return { ...state, isAddingJob: false, jobsMessage: action.message };
+    case "queueDrainStarted":
+      return { ...state, isDrainingQueue: true, jobsMessage: "" };
+    case "queueDrained":
+      if (!isSameQueue(state.selectedQueue, action.queue)) return state;
+      return {
+        ...state,
+        jobs: action.result.jobs,
+        jobsPage: action.result.page,
+        jobsTotal: action.result.total,
+        hasNextJobsPage: action.result.hasNextPage,
+        isDrainingQueue: false,
+        jobsMessage: `Emptied queue "${action.queue.name}".`,
+      };
+    case "queueDrainFailed":
+      return {
+        ...state,
+        isDrainingQueue: false,
+        jobsMessage: action.message,
+      };
     case "queueObliterateStarted":
       return { ...state, isObliteratingQueue: true, jobsMessage: "" };
     case "queueObliterated":

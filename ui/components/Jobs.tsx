@@ -48,6 +48,7 @@ function formatJobData(data: unknown) {
 export function Jobs() {
   const [isStatusFilterOpen, setIsStatusFilterOpen] = useState(false);
   const [isQueueOptionsOpen, setIsQueueOptionsOpen] = useState(false);
+  const [isDrainConfirmationOpen, setIsDrainConfirmationOpen] = useState(false);
   const [isObliterateConfirmationOpen, setIsObliterateConfirmationOpen] =
     useState(false);
   const {
@@ -61,12 +62,14 @@ export function Jobs() {
       isLoadingJobs,
       jobsMessage,
       deletingJobId,
+      isDrainingQueue,
       isObliteratingQueue,
     },
     actions: {
       showQueues,
       deleteJob,
       openAddJob,
+      drainQueue,
       obliterateQueue,
       showPreviousJobsPage,
       showNextJobsPage,
@@ -79,6 +82,13 @@ export function Jobs() {
 
   const canShowPreviousPage = jobsPage > 1 && !isLoadingJobs;
   const canShowNextPage = hasNextJobsPage && !isLoadingJobs;
+
+  const confirmDrainQueue = async () => {
+    if (isDrainingQueue) return;
+
+    await drainQueue();
+    setIsDrainConfirmationOpen(false);
+  };
 
   const confirmObliterateQueue = async () => {
     if (isObliteratingQueue) return;
@@ -217,19 +227,39 @@ export function Jobs() {
                 right={0}
                 zIndex={2_000}
                 width={20}
-                height={3}
+                height={5}
                 border
-                borderColor="#DC2626"
+                borderColor="#253552"
                 backgroundColor="#000000"
-                paddingLeft={1}
-                paddingRight={1}
-                alignItems="center"
-                onMouseDown={() => {
-                  setIsQueueOptionsOpen(false);
-                  setIsObliterateConfirmationOpen(true);
-                }}
+                flexDirection="column"
+                gap={1}
               >
-                <text fg="#FB7185">Obliterate queue</text>
+                <box
+                  width="100%"
+                  height={1}
+                  paddingLeft={1}
+                  paddingRight={1}
+                  alignItems="flex-start"
+                  onMouseDown={() => {
+                    setIsQueueOptionsOpen(false);
+                    setIsDrainConfirmationOpen(true);
+                  }}
+                >
+                  <text fg="#C7D2E9">Empty queue</text>
+                </box>
+                <box
+                  width="100%"
+                  height={1}
+                  paddingLeft={1}
+                  paddingRight={1}
+                  alignItems="flex-start"
+                  onMouseDown={() => {
+                    setIsQueueOptionsOpen(false);
+                    setIsObliterateConfirmationOpen(true);
+                  }}
+                >
+                  <text fg="#FB7185">Obliterate queue</text>
+                </box>
               </box>
             ) : null}
           </box>
@@ -365,7 +395,8 @@ export function Jobs() {
         <text
           fg={
             jobsMessage.startsWith("Deleted ") ||
-            jobsMessage.startsWith("Added ")
+            jobsMessage.startsWith("Added ") ||
+            jobsMessage.startsWith("Emptied ")
               ? "#4ADE80"
               : "#FB7185"
           }
@@ -373,6 +404,18 @@ export function Jobs() {
           {jobsMessage}
         </text>
       ) : null}
+
+      <ConfirmationDialog
+        isOpen={isDrainConfirmationOpen}
+        title="Empty queue?"
+        message={`This removes all waiting and delayed jobs from ${selectedQueue.name}.`}
+        confirmLabel="Yes, empty"
+        pendingLabel="Emptying..."
+        isPending={isDrainingQueue}
+        variant="danger"
+        onCancel={() => setIsDrainConfirmationOpen(false)}
+        onConfirm={() => void confirmDrainQueue()}
+      />
 
       <ConfirmationDialog
         isOpen={isObliterateConfirmationOpen}
