@@ -49,6 +49,7 @@ function formatJobData(data: unknown) {
 export function Jobs() {
   const [isStatusFilterOpen, setIsStatusFilterOpen] = useState(false);
   const [isQueueOptionsOpen, setIsQueueOptionsOpen] = useState(false);
+  const [isQueueInfoOpen, setIsQueueInfoOpen] = useState(false);
   const [isRateLimitDialogOpen, setIsRateLimitDialogOpen] = useState(false);
   const [rateLimitDuration, setRateLimitDuration] = useState("");
   const [rateLimitError, setRateLimitError] = useState("");
@@ -57,6 +58,7 @@ export function Jobs() {
     useState(false);
   const {
     state: {
+      queues,
       selectedQueue,
       jobs,
       jobsPage,
@@ -88,6 +90,10 @@ export function Jobs() {
 
   const canShowPreviousPage = jobsPage > 1 && !isLoadingJobs;
   const canShowNextPage = hasNextJobsPage && !isLoadingJobs;
+  const selectedQueueInfo = queues.find(
+    (queue) =>
+      queue.name === selectedQueue.name && queue.prefix === selectedQueue.prefix,
+  );
 
   const confirmRateLimitQueue = async () => {
     if (isRateLimitingQueue) return;
@@ -150,9 +156,73 @@ export function Jobs() {
           >
             <text fg="#FFFFFF">← Back</text>
           </box>
-          <text fg="#F3F6FF">
-            {selectedQueue.name} · {jobsTotal} jobs
-          </text>
+          <box
+            position="relative"
+            flexDirection="row"
+            alignItems="center"
+            gap={1}
+          >
+            <text fg="#F3F6FF">
+              {selectedQueue.name} · {jobsTotal} jobs
+            </text>
+            <box
+              width={3}
+              height={1}
+              alignItems="center"
+              justifyContent="center"
+              onMouseDown={() => {
+                setIsStatusFilterOpen(false);
+                setIsQueueOptionsOpen(false);
+                setIsQueueInfoOpen((isOpen) => !isOpen);
+              }}
+            >
+              <text fg="#60A5FA">ⓘ</text>
+            </box>
+
+            {isQueueInfoOpen ? (
+              <box
+                position="absolute"
+                top={2}
+                left={0}
+                zIndex={2_000}
+                width={44}
+                height={8}
+                border
+                borderColor="#3B82F6"
+                backgroundColor="#000000"
+                paddingLeft={1}
+                paddingRight={1}
+                flexDirection="column"
+              >
+                <text fg="#C7D2E9">Prefix: {selectedQueue.prefix}</text>
+                <text fg="#C7D2E9">
+                  Status:{" "}
+                  {selectedQueueInfo
+                    ? selectedQueueInfo.meta.paused
+                      ? "paused"
+                      : "running"
+                    : "unknown"}
+                </text>
+                <text fg="#C7D2E9">
+                  Version: {selectedQueueInfo?.meta.version ?? "unknown"}
+                </text>
+                <text fg="#C7D2E9">
+                  Concurrency: {selectedQueueInfo?.meta.concurrency ?? "not set"}
+                </text>
+                <text fg="#C7D2E9">
+                  Rate limit:{" "}
+                  {selectedQueueInfo?.meta.max !== undefined &&
+                  selectedQueueInfo.meta.duration !== undefined
+                    ? `${selectedQueueInfo.meta.max} jobs / ${selectedQueueInfo.meta.duration} ms`
+                    : "not set"}
+                </text>
+                <text fg="#C7D2E9">
+                  Event stream max:{" "}
+                  {selectedQueueInfo?.meta.maxLenEvents ?? "not set"}
+                </text>
+              </box>
+            ) : null}
+          </box>
         </box>
         <box height={3} flexDirection="row" alignItems="center" gap={1}>
           <box width={30} height={3} position="relative" zIndex={1_500}>
@@ -167,6 +237,7 @@ export function Jobs() {
               alignItems="center"
               justifyContent="space-between"
               onMouseDown={() => {
+                setIsQueueInfoOpen(false);
                 setIsQueueOptionsOpen(false);
                 setIsStatusFilterOpen((isOpen) => !isOpen);
               }}
@@ -234,6 +305,7 @@ export function Jobs() {
               alignItems="center"
               justifyContent="center"
               onMouseDown={() => {
+                setIsQueueInfoOpen(false);
                 setIsStatusFilterOpen(false);
                 setIsQueueOptionsOpen((isOpen) => !isOpen);
               }}
@@ -337,6 +409,7 @@ export function Jobs() {
                 paddingRight={1}
                 flexDirection="column"
                 onMouseDown={() => {
+                  setIsQueueInfoOpen(false);
                   setIsStatusFilterOpen(false);
                   setIsQueueOptionsOpen(false);
                   void openJobDetails(job.id);
