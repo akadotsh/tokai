@@ -1,4 +1,5 @@
 import { SyntaxStyle } from "@opentui/core";
+import { useKeyboard } from "@opentui/react";
 import type { PropsWithChildren } from "react";
 import { useTokai } from "../provider";
 
@@ -70,6 +71,14 @@ export function JobDetailsModal() {
     },
     actions: { closeJobDetails },
   } = useTokai();
+
+  useKeyboard((event) => {
+    if (selectedJobId && event.name === "escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      closeJobDetails();
+    }
+  });
 
   if (!selectedJobId) return null;
 

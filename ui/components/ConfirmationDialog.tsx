@@ -1,3 +1,5 @@
+import { useKeyboard } from "@opentui/react";
+
 type ConfirmationDialogProps = {
   isOpen: boolean;
   title: string;
@@ -23,6 +25,14 @@ export function ConfirmationDialog({
   onConfirm,
   onCancel,
 }: ConfirmationDialogProps) {
+  useKeyboard((event) => {
+    if (isOpen && !isPending && event.name === "escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      onCancel();
+    }
+  });
+
   if (!isOpen) return null;
 
   const accentColor = variant === "danger" ? "#DC2626" : "#2563EB";
