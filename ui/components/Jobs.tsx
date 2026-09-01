@@ -5,6 +5,7 @@ import {
   type QueueJobStatus,
 } from "../../server/index";
 import { useTokai } from "../provider";
+import { ConfirmationDialog } from "./ConfirmationDialog";
 import { JobDetailsModal } from "./JobDetailsModal";
 
 const statusColors: Record<QueueJobStatus, string> = {
@@ -46,6 +47,9 @@ function formatJobData(data: unknown) {
 
 export function Jobs() {
   const [isStatusFilterOpen, setIsStatusFilterOpen] = useState(false);
+  const [isQueueOptionsOpen, setIsQueueOptionsOpen] = useState(false);
+  const [isObliterateConfirmationOpen, setIsObliterateConfirmationOpen] =
+    useState(false);
   const {
     state: {
       selectedQueue,
@@ -75,6 +79,13 @@ export function Jobs() {
 
   const canShowPreviousPage = jobsPage > 1 && !isLoadingJobs;
   const canShowNextPage = hasNextJobsPage && !isLoadingJobs;
+
+  const confirmObliterateQueue = async () => {
+    if (isObliteratingQueue) return;
+
+    await obliterateQueue();
+    setIsObliterateConfirmationOpen(false);
+  };
 
   return (
     <box
@@ -124,7 +135,10 @@ export function Jobs() {
               flexDirection="row"
               alignItems="center"
               justifyContent="space-between"
-              onMouseDown={() => setIsStatusFilterOpen((isOpen) => !isOpen)}
+              onMouseDown={() => {
+                setIsQueueOptionsOpen(false);
+                setIsStatusFilterOpen((isOpen) => !isOpen);
+              }}
             >
               <text fg="#C7D2E9">
                 Status: {jobsStatusFilter ?? "all"}
@@ -181,17 +195,43 @@ export function Jobs() {
           >
             <text fg="#FFFFFF">Add Job</text>
           </box>
-          <box
-            width={18}
-            height={3}
-            backgroundColor="#DC2626"
-            alignItems="center"
-            justifyContent="center"
-            onMouseDown={obliterateQueue}
-          >
-            <text fg="#FFFFFF">
-              {isObliteratingQueue ? "Obliterating..." : "Obliterate"}
-            </text>
+          <box width={5} height={3} position="relative" zIndex={1_500}>
+            <box
+              width={5}
+              height={3}
+              backgroundColor="#253552"
+              alignItems="center"
+              justifyContent="center"
+              onMouseDown={() => {
+                setIsStatusFilterOpen(false);
+                setIsQueueOptionsOpen((isOpen) => !isOpen);
+              }}
+            >
+              <text fg="#C7D2E9">⋮</text>
+            </box>
+
+            {isQueueOptionsOpen ? (
+              <box
+                position="absolute"
+                top={3}
+                right={0}
+                zIndex={2_000}
+                width={20}
+                height={3}
+                border
+                borderColor="#DC2626"
+                backgroundColor="#000000"
+                paddingLeft={1}
+                paddingRight={1}
+                alignItems="center"
+                onMouseDown={() => {
+                  setIsQueueOptionsOpen(false);
+                  setIsObliterateConfirmationOpen(true);
+                }}
+              >
+                <text fg="#FB7185">Obliterate queue</text>
+              </box>
+            ) : null}
           </box>
         </box>
       </box>
@@ -232,6 +272,7 @@ export function Jobs() {
                 flexDirection="column"
                 onMouseDown={() => {
                   setIsStatusFilterOpen(false);
+                  setIsQueueOptionsOpen(false);
                   void openJobDetails(job.id);
                 }}
               >
@@ -332,6 +373,18 @@ export function Jobs() {
           {jobsMessage}
         </text>
       ) : null}
+
+      <ConfirmationDialog
+        isOpen={isObliterateConfirmationOpen}
+        title="Obliterate queue?"
+        message={`This permanently removes ${selectedQueue.name} and all its jobs.`}
+        confirmLabel="Yes, obliterate"
+        pendingLabel="Obliterating..."
+        isPending={isObliteratingQueue}
+        variant="danger"
+        onCancel={() => setIsObliterateConfirmationOpen(false)}
+        onConfirm={() => void confirmObliterateQueue()}
+      />
 
       <JobDetailsModal />
     </box>
