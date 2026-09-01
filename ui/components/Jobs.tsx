@@ -229,8 +229,7 @@ export function Jobs() {
             <box
               width={30}
               height={3}
-              border
-              borderColor="#3B82F6"
+              backgroundColor="#253552"
               paddingLeft={1}
               paddingRight={1}
               flexDirection="row"
@@ -255,7 +254,7 @@ export function Jobs() {
                 left={0}
                 zIndex={2_000}
                 width={30}
-                height={statusFilterOptions.length + 2}
+                height={statusFilterOptions.length * 3 + 2}
                 border
                 borderColor="#3B82F6"
                 backgroundColor="#000000"
@@ -268,11 +267,12 @@ export function Jobs() {
                     <box
                       key={option.label}
                       width="100%"
-                      height={1}
+                      height={3}
                       paddingLeft={1}
                       paddingRight={1}
                       backgroundColor={isSelected ? "#1D4ED8" : "#000000"}
-                      alignItems="center"
+                      alignItems="flex-start"
+                      justifyContent="center"
                       onMouseDown={() => {
                         setIsStatusFilterOpen(false);
                         void filterJobsByStatus(option.value);
