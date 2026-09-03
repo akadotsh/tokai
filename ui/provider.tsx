@@ -14,6 +14,7 @@ import { createInitialState, reducer, type AppState } from "./reducer";
 
 type TokaiActions = {
   setRedisUrl: (value: string) => void;
+  setPollingInterval: (value: number) => void;
   connect: () => Promise<void>;
   disconnect: () => Promise<void>;
   fetchQueues: () => Promise<void>;
@@ -45,7 +46,6 @@ type TokaiContextValue = {
 };
 
 const TokaiContext = createContext<TokaiContextValue | null>(null);
-const POLL_INTERVAL_MS = 5_000;
 const JOBS_PAGE_SIZE = 10;
 
 export function TokaiProvider({ children }: PropsWithChildren) {
@@ -56,6 +56,7 @@ export function TokaiProvider({ children }: PropsWithChildren) {
   );
   const {
     redisUrl,
+    pollingIntervalMs,
     selectedQueue,
     jobsPage,
     hasNextJobsPage,
@@ -126,7 +127,7 @@ export function TokaiProvider({ children }: PropsWithChildren) {
       }
     };
 
-    const interval = setInterval(() => void poll(), POLL_INTERVAL_MS);
+    const interval = setInterval(() => void poll(), pollingIntervalMs);
 
     return () => {
       isActive = false;
@@ -141,6 +142,7 @@ export function TokaiProvider({ children }: PropsWithChildren) {
     isObliteratingQueue,
     jobsPage,
     jobsStatusFilter,
+    pollingIntervalMs,
     selectedQueue?.name,
     selectedQueue?.prefix,
   ]);
@@ -460,6 +462,8 @@ export function TokaiProvider({ children }: PropsWithChildren) {
 
   const actions: TokaiActions = {
     setRedisUrl: (value) => dispatch({ type: "redisUrlChanged", value }),
+    setPollingInterval: (value) =>
+      dispatch({ type: "pollingIntervalChanged", value }),
     connect,
     disconnect,
     fetchQueues,

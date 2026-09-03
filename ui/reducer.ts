@@ -9,6 +9,7 @@ import type {
 
 export type AppState = {
   redisUrl: string;
+  pollingIntervalMs: number;
   queues: JobCounts[];
   selectedQueue: QueueRef | null;
   jobs: QueueJobSummary[];
@@ -36,6 +37,7 @@ export type AppState = {
 
 export type AppAction =
   | { type: "redisUrlChanged"; value: string }
+  | { type: "pollingIntervalChanged"; value: number }
   | { type: "messageSet"; message: string }
   | { type: "connected"; redisUrl: string }
   | { type: "disconnected" }
@@ -87,6 +89,7 @@ export type AppAction =
 export function createInitialState(isConnected: boolean): AppState {
   return {
     redisUrl: "",
+    pollingIntervalMs: 5_000,
     queues: [],
     selectedQueue: null,
     jobs: [],
@@ -121,6 +124,8 @@ export function reducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
     case "redisUrlChanged":
       return { ...state, redisUrl: action.value, message: "" };
+    case "pollingIntervalChanged":
+      return { ...state, pollingIntervalMs: action.value };
     case "messageSet":
       return { ...state, message: action.message };
     case "connected":

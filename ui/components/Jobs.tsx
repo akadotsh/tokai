@@ -49,6 +49,10 @@ export function Jobs() {
   const [isStatusFilterOpen, setIsStatusFilterOpen] = useState(false);
   const [isQueueOptionsOpen, setIsQueueOptionsOpen] = useState(false);
   const [isQueueInfoOpen, setIsQueueInfoOpen] = useState(false);
+  const [isPollingIntervalEditing, setIsPollingIntervalEditing] =
+    useState(false);
+  const [pollingIntervalInput, setPollingIntervalInput] = useState("");
+  const [pollingIntervalError, setPollingIntervalError] = useState("");
   const [isRateLimitDialogOpen, setIsRateLimitDialogOpen] = useState(false);
   const [rateLimitDuration, setRateLimitDuration] = useState("");
   const [rateLimitError, setRateLimitError] = useState("");
@@ -64,6 +68,7 @@ export function Jobs() {
       jobsTotal,
       hasNextJobsPage,
       jobsStatusFilter,
+      pollingIntervalMs,
       isLoadingJobs,
       jobsMessage,
       deletingJobId,
@@ -73,6 +78,7 @@ export function Jobs() {
     },
     actions: {
       showQueues,
+      setPollingInterval,
       deleteJob,
       openAddJob,
       drainQueue,
@@ -93,6 +99,31 @@ export function Jobs() {
     (queue) =>
       queue.name === selectedQueue.name && queue.prefix === selectedQueue.prefix,
   );
+
+  const closeQueueInfo = () => {
+    setIsQueueInfoOpen(false);
+    setIsPollingIntervalEditing(false);
+    setPollingIntervalError("");
+  };
+
+  const editPollingInterval = () => {
+    setPollingIntervalInput(String(pollingIntervalMs));
+    setPollingIntervalError("");
+    setIsPollingIntervalEditing(true);
+  };
+
+  const confirmPollingInterval = () => {
+    const intervalMs = Number(pollingIntervalInput);
+
+    if (!Number.isInteger(intervalMs) || intervalMs <= 0) {
+      setPollingIntervalError("Enter a positive whole number of milliseconds.");
+      return;
+    }
+
+    setPollingInterval(intervalMs);
+    setIsPollingIntervalEditing(false);
+    setPollingIntervalError("");
+  };
 
   const confirmRateLimitQueue = async () => {
     if (isRateLimitingQueue) return;
@@ -172,7 +203,11 @@ export function Jobs() {
               onMouseDown={() => {
                 setIsStatusFilterOpen(false);
                 setIsQueueOptionsOpen(false);
-                setIsQueueInfoOpen((isOpen) => !isOpen);
+                if (isQueueInfoOpen) {
+                  closeQueueInfo();
+                } else {
+                  setIsQueueInfoOpen(true);
+                }
               }}
             >
               <text fg="#60A5FA">ⓘ</text>
@@ -184,14 +219,21 @@ export function Jobs() {
                 top={2}
                 left={0}
                 zIndex={2_000}
-                width={44}
-                height={8}
+                width={52}
+                height={
+                  isPollingIntervalEditing
+                    ? pollingIntervalError
+                      ? 19
+                      : 17
+                    : 15
+                }
                 border
                 borderColor="#3B82F6"
                 backgroundColor="#000000"
                 paddingLeft={1}
                 paddingRight={1}
                 flexDirection="column"
+                gap={1}
               >
                 <text fg="#C7D2E9">Prefix: {selectedQueue.prefix}</text>
                 <text fg="#C7D2E9">
@@ -219,6 +261,71 @@ export function Jobs() {
                   Event stream max:{" "}
                   {selectedQueueInfo?.meta.maxLenEvents ?? "not set"}
                 </text>
+                {isPollingIntervalEditing ? (
+                  <>
+                    <box
+                      width="100%"
+                      height={3}
+                      flexDirection="row"
+                      alignItems="center"
+                      gap={1}
+                    >
+                      <text fg="#C7D2E9">Polling:</text>
+                      <box height={3} minWidth={0} flexGrow={1} border>
+                        <input
+                          value={pollingIntervalInput}
+                          placeholder="5000"
+                          placeholderColor="#59677F"
+                          textColor="#F3F6FF"
+                          focused
+                          onInput={(value) => {
+                            setPollingIntervalInput(value);
+                            setPollingIntervalError("");
+                          }}
+                          onSubmit={confirmPollingInterval}
+                        />
+                      </box>
+                      <text fg="#8290AA">ms</text>
+                      <box
+                        width={3}
+                        height={1}
+                        alignItems="center"
+                        justifyContent="center"
+                        onMouseDown={confirmPollingInterval}
+                      >
+                        <text fg="#4ADE80">✓</text>
+                      </box>
+                      <box
+                        width={3}
+                        height={1}
+                        alignItems="center"
+                        justifyContent="center"
+                        onMouseDown={() => {
+                          setIsPollingIntervalEditing(false);
+                          setPollingIntervalError("");
+                        }}
+                      >
+                        <text fg="#FB7185">×</text>
+                      </box>
+                    </box>
+                    {pollingIntervalError ? (
+                      <text fg="#FB7185">{pollingIntervalError}</text>
+                    ) : null}
+                  </>
+                ) : (
+                  <box height={1} flexDirection="row" alignItems="center" gap={1}>
+                    <text fg="#C7D2E9">Polling: {pollingIntervalMs} ms</text>
+                    <box
+                      width={6}
+                      height={1}
+                      alignItems="center"
+                      justifyContent="center"
+                      onMouseDown={editPollingInterval}
+                    >
+                      <text fg="#60A5FA">Edit</text>
+                    </box>
+                  </box>
+                )}
               </box>
             ) : null}
           </box>
@@ -235,7 +342,7 @@ export function Jobs() {
               alignItems="center"
               justifyContent="space-between"
               onMouseDown={() => {
-                setIsQueueInfoOpen(false);
+                closeQueueInfo();
                 setIsQueueOptionsOpen(false);
                 setIsStatusFilterOpen((isOpen) => !isOpen);
               }}
@@ -304,7 +411,7 @@ export function Jobs() {
               alignItems="center"
               justifyContent="center"
               onMouseDown={() => {
-                setIsQueueInfoOpen(false);
+                closeQueueInfo();
                 setIsStatusFilterOpen(false);
                 setIsQueueOptionsOpen((isOpen) => !isOpen);
               }}
@@ -408,7 +515,7 @@ export function Jobs() {
                 paddingRight={1}
                 flexDirection="column"
                 onMouseDown={() => {
-                  setIsQueueInfoOpen(false);
+                  closeQueueInfo();
                   setIsStatusFilterOpen(false);
                   setIsQueueOptionsOpen(false);
                   void openJobDetails(job.id);
