@@ -17,7 +17,6 @@ const statusColors: Record<QueueJobStatus, string> = {
   wait: "#C7D2E9",
   "waiting-children": "#A78BFA",
   prioritized: "#F472B6",
-  paused: "#94A3B8",
   repeat: "#2DD4BF",
 };
 

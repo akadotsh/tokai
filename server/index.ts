@@ -3,6 +3,7 @@ import {
   IRedisClient,
   Queue,
   createBunRedisClient,
+  type JobType,
   type QueueMeta,
 } from "bullmq";
 
@@ -11,21 +12,23 @@ export type QueueRef = {
   prefix: string;
 };
 
+export const queueJobStatuses = [
+  "completed",
+  "failed",
+  "delayed",
+  "active",
+  "wait",
+  "waiting-children",
+  "prioritized",
+  "repeat",
+] as const satisfies readonly JobType[];
+
+export type QueueJobStatus = (typeof queueJobStatuses)[number];
+
 export type JobCounts = QueueRef & {
   meta: QueueMeta;
   counts: Record<QueueJobStatus, number>;
 };
-
-export type QueueJobStatus =
-  | "completed"
-  | "failed"
-  | "delayed"
-  | "active"
-  | "wait"
-  | "waiting-children"
-  | "prioritized"
-  | "paused"
-  | "repeat";
 
 export type QueueJobSummary = {
   id: string;
@@ -66,18 +69,6 @@ export type QueueJobDetails = {
   logs: string[];
   logsCount: number;
 };
-
-export const queueJobStatuses: QueueJobStatus[] = [
-  "completed",
-  "failed",
-  "delayed",
-  "active",
-  "wait",
-  "waiting-children",
-  "prioritized",
-  "paused",
-  "repeat",
-];
 
 class RedisConnection {
   isConnected: boolean = false;
@@ -179,10 +170,7 @@ class RedisConnection {
     });
 
     try {
-      const getJobCounts = queue.getJobCounts.bind(queue) as (
-        ...types: QueueJobStatus[]
-      ) => Promise<Record<string, number>>;
-      const counts = await getJobCounts(...queueJobStatuses);
+      const counts = await queue.getJobCounts(...queueJobStatuses);
 
       return Object.fromEntries(
         queueJobStatuses.map((status) => [status, counts[status] ?? 0]),
@@ -217,24 +205,10 @@ class RedisConnection {
     });
 
     try {
-      const getJobs = queue.getJobs.bind(queue) as (
-        types: QueueJobStatus[],
-        start: number,
-        end: number,
-        asc: boolean,
-      ) => Promise<
-        Array<{
-          id?: string;
-          name: string;
-          timestamp: number;
-          data: unknown;
-        }>
-      >;
-      const getJobCounts = queue.getJobCounts.bind(queue) as (
-        ...types: QueueJobStatus[]
-      ) => Promise<Record<string, number>>;
-      const statuses = status ? [status] : queueJobStatuses;
-      const counts = await getJobCounts(...statuses);
+      const statuses: QueueJobStatus[] = status
+        ? [status]
+        : [...queueJobStatuses];
+      const counts = await queue.getJobCounts(...statuses);
       const total = statuses.reduce(
         (sum, currentStatus) => sum + (counts[currentStatus] ?? 0),
         0,
@@ -251,7 +225,7 @@ class RedisConnection {
 
           if (start > end) return [];
 
-          const jobs = await getJobs([currentStatus], start, end, true);
+          const jobs = await queue.getJobs([currentStatus], start, end, true);
           return jobs.map(
             (job): QueueJobSummary => ({
               id: job.id ?? "(no id)",

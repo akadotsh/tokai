@@ -115,7 +115,6 @@ export function Queues() {
                   <text fg="#F472B6">prioritized {counts.prioritized}</text>
                 </box>
                 <box flexDirection="row" gap={2}>
-                  <text fg="#94A3B8">paused {counts.paused}</text>
                   <text fg="#2DD4BF">repeat {counts.repeat}</text>
                 </box>
               </box>
