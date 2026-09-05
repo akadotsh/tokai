@@ -74,8 +74,62 @@ export type QueueJobDetails = {
 class RedisConnection {
   isConnected: boolean = false;
   connection: IRedisClient | null = null;
+  private queues = new Map<string, Queue>();
+
+  private getQueueKey(queueRef: QueueRef) {
+    return JSON.stringify([queueRef.prefix, queueRef.name]);
+  }
+
+  private getQueue(queueRef: QueueRef) {
+    if (!this.connection) {
+      throw new Error("Connect to Redis before accessing a queue.");
+    }
+
+    const key = this.getQueueKey(queueRef);
+    const cachedQueue = this.queues.get(key);
+
+    if (cachedQueue) return cachedQueue;
+
+    // Passing the existing adapter makes BullMQ treat the connection as shared.
+    // Closing a cached Queue therefore does not disconnect the base client.
+    const queue = new Queue(queueRef.name, {
+      connection: this.connection,
+      prefix: queueRef.prefix,
+      skipMetasUpdate: true,
+    });
+    this.queues.set(key, queue);
+    return queue;
+  }
+
+  private async closeQueue(queueRef: QueueRef) {
+    const key = this.getQueueKey(queueRef);
+    const queue = this.queues.get(key);
+
+    if (!queue) return;
+
+    this.queues.delete(key);
+    await queue.close();
+  }
+
+  private async closeMissingQueues(queueRefs: QueueRef[]) {
+    const currentKeys = new Set(
+      queueRefs.map((queueRef) => this.getQueueKey(queueRef)),
+    );
+    const staleQueues = [...this.queues.entries()].filter(
+      ([key]) => !currentKeys.has(key),
+    );
+
+    const queuesToClose = staleQueues.map(([key, queue]) => {
+      this.queues.delete(key);
+      return queue;
+    });
+
+    await Promise.all(queuesToClose.map((queue) => queue.close()));
+  }
 
   async connect(url: string) {
+    if (this.connection) await this.disconnect();
+
     const rawClient = new RedisClient(url);
     const connection = createBunRedisClient(rawClient, {
       lazyConnect: true,
@@ -88,9 +142,17 @@ class RedisConnection {
   }
 
   async disconnect() {
-    this.connection?.disconnect();
-    this.connection = null;
-    this.isConnected = false;
+    const connection = this.connection;
+    const queues = [...this.queues.values()];
+    this.queues.clear();
+
+    try {
+      await Promise.all(queues.map((queue) => queue.close()));
+    } finally {
+      connection?.disconnect();
+      this.connection = null;
+      this.isConnected = false;
+    }
     console.log("Disconnected");
   }
 
@@ -127,6 +189,8 @@ class RedisConnection {
         left.name.localeCompare(right.name),
     );
 
+    await this.closeMissingQueues(queueRefs);
+
     const jobCounts: JobCounts[] = await Promise.all(
       queueRefs.map(async (queue) => {
         const [meta, counts] = await Promise.all([
@@ -142,43 +206,17 @@ class RedisConnection {
   }
 
   async getQueueMeta(queueRef: QueueRef) {
-    if (!this.connection) {
-      throw new Error("Connect to Redis before fetching queue meta.");
-    }
-
-    const queue = new Queue(queueRef.name, {
-      connection: this.connection.duplicate(),
-      prefix: queueRef.prefix,
-      skipMetasUpdate: true,
-    });
-
-    try {
-      return await queue.getMeta();
-    } finally {
-      await queue.close();
-    }
+    return this.getQueue(queueRef).getMeta();
   }
 
   async getQueueJobCounts(queueRef: QueueRef) {
-    if (!this.connection) {
-      throw new Error("Connect to Redis before fetching job counts.");
-    }
+    const counts = await this.getQueue(queueRef).getJobCounts(
+      ...queueJobStatuses,
+    );
 
-    const queue = new Queue(queueRef.name, {
-      connection: this.connection.duplicate(),
-      prefix: queueRef.prefix,
-      skipMetasUpdate: true,
-    });
-
-    try {
-      const counts = await queue.getJobCounts(...queueJobStatuses);
-
-      return Object.fromEntries(
-        queueJobStatuses.map((status) => [status, counts[status] ?? 0]),
-      ) as Record<QueueJobStatus, number>;
-    } finally {
-      await queue.close();
-    }
+    return Object.fromEntries(
+      queueJobStatuses.map((status) => [status, counts[status] ?? 0]),
+    ) as Record<QueueJobStatus, number>;
   }
 
   async getQueueJobs(
@@ -199,262 +237,143 @@ class RedisConnection {
       throw new Error("Job page size must be a positive integer.");
     }
 
-    const queue = new Queue(queueRef.name, {
-      connection: this.connection.duplicate(),
-      prefix: queueRef.prefix,
-      skipMetasUpdate: true,
-    });
+    const queue = this.getQueue(queueRef);
+    const statuses: QueueJobStatus[] = status
+      ? [status]
+      : [...queueJobStatuses];
+    const counts = await queue.getJobCounts(...statuses);
+    const total = statuses.reduce(
+      (sum, currentStatus) => sum + (counts[currentStatus] ?? 0),
+      0,
+    );
+    const pageStart = (page - 1) * pageSize;
+    const pageEnd = pageStart + pageSize;
+    let statusStart = 0;
+    const jobsByStatus = await Promise.all(
+      statuses.map(async (currentStatus) => {
+        const statusCount = counts[currentStatus] ?? 0;
+        const start = Math.max(0, pageStart - statusStart);
+        const end = Math.min(statusCount, pageEnd - statusStart) - 1;
+        statusStart += statusCount;
 
-    try {
-      const statuses: QueueJobStatus[] = status
-        ? [status]
-        : [...queueJobStatuses];
-      const counts = await queue.getJobCounts(...statuses);
-      const total = statuses.reduce(
-        (sum, currentStatus) => sum + (counts[currentStatus] ?? 0),
-        0,
-      );
-      const pageStart = (page - 1) * pageSize;
-      const pageEnd = pageStart + pageSize;
-      let statusStart = 0;
-      const jobsByStatus = await Promise.all(
-        statuses.map(async (currentStatus) => {
-          const statusCount = counts[currentStatus] ?? 0;
-          const start = Math.max(0, pageStart - statusStart);
-          const end = Math.min(statusCount, pageEnd - statusStart) - 1;
-          statusStart += statusCount;
+        if (start > end) return [];
 
-          if (start > end) return [];
+        const jobs = await queue.getJobs([currentStatus], start, end, true);
+        return jobs.map(
+          (job): QueueJobSummary => ({
+            id: job.id ?? "(no id)",
+            name: job.name,
+            status: currentStatus,
+            timestamp: job.timestamp,
+            data: job.data,
+          }),
+        );
+      }),
+    );
 
-          const jobs = await queue.getJobs([currentStatus], start, end, true);
-          return jobs.map(
-            (job): QueueJobSummary => ({
-              id: job.id ?? "(no id)",
-              name: job.name,
-              status: currentStatus,
-              timestamp: job.timestamp,
-              data: job.data,
-            }),
-          );
-        }),
-      );
-
-      return {
-        jobs: jobsByStatus.flat(),
-        page,
-        pageSize,
-        status,
-        total,
-        hasNextPage: pageEnd < total,
-      } satisfies QueueJobsPage;
-    } finally {
-      await queue.close();
-    }
+    return {
+      jobs: jobsByStatus.flat(),
+      page,
+      pageSize,
+      status,
+      total,
+      hasNextPage: pageEnd < total,
+    } satisfies QueueJobsPage;
   }
 
   async removeQueueJob(queueRef: QueueRef, jobId: string) {
-    if (!this.connection) {
-      throw new Error("Connect to Redis before deleting a job.");
-    }
+    const removed = await this.getQueue(queueRef).remove(jobId);
 
-    const queue = new Queue(queueRef.name, {
-      connection: this.connection.duplicate(),
-      prefix: queueRef.prefix,
-      skipMetasUpdate: true,
-    });
-
-    try {
-      const removed = await queue.remove(jobId);
-
-      if (removed === 0) {
-        throw new Error(`Job "${jobId}" was not found or is currently locked.`);
-      }
-    } finally {
-      await queue.close();
+    if (removed === 0) {
+      throw new Error(`Job "${jobId}" was not found or is currently locked.`);
     }
   }
 
   async retryQueueJob(queueRef: QueueRef, jobId: string) {
-    if (!this.connection) {
-      throw new Error("Connect to Redis before retrying a job.");
+    const job = await this.getQueue(queueRef).getJob(jobId);
+
+    if (!job) {
+      throw new Error(`Job "${jobId}" was not found.`);
     }
 
-    const queue = new Queue(queueRef.name, {
-      connection: this.connection.duplicate(),
-      prefix: queueRef.prefix,
-      skipMetasUpdate: true,
-    });
+    const state = await job.getState();
 
-    try {
-      const job = await queue.getJob(jobId);
-
-      if (!job) {
-        throw new Error(`Job "${jobId}" was not found.`);
-      }
-
-      const state = await job.getState();
-
-      if (state !== "failed" && state !== "completed") {
-        throw new Error(
-          `Job "${jobId}" cannot be retried while it is ${state}.`,
-        );
-      }
-
-      await job.retry(state);
-    } finally {
-      await queue.close();
+    if (state !== "failed" && state !== "completed") {
+      throw new Error(`Job "${jobId}" cannot be retried while it is ${state}.`);
     }
+
+    await job.retry(state);
   }
 
   async getQueueJobDetails(queueRef: QueueRef, jobId: string) {
-    if (!this.connection) {
-      throw new Error("Connect to Redis before fetching job details.");
+    const queue = this.getQueue(queueRef);
+    const job = await queue.getJob(jobId);
+
+    if (!job) {
+      throw new Error(`Job "${jobId}" was not found.`);
     }
 
-    const queue = new Queue(queueRef.name, {
-      connection: this.connection.duplicate(),
-      prefix: queueRef.prefix,
-      skipMetasUpdate: true,
-    });
+    const [state, jobLogs] = await Promise.all([
+      job.getState(),
+      queue.getJobLogs(jobId, 0, -1, true),
+    ]);
 
-    try {
-      const job = await queue.getJob(jobId);
-
-      if (!job) {
-        throw new Error(`Job "${jobId}" was not found.`);
-      }
-
-      const [state, jobLogs] = await Promise.all([
-        job.getState(),
-        queue.getJobLogs(jobId, 0, -1, true),
-      ]);
-
-      return {
-        id: job.id ?? jobId,
-        name: job.name,
-        state,
-        data: job.data,
-        options: job.opts,
-        progress: job.progress,
-        returnValue: job.returnvalue,
-        failedReason: job.failedReason || null,
-        stackTrace: job.stacktrace ?? [],
-        attemptsMade: job.attemptsMade,
-        attemptsStarted: job.attemptsStarted,
-        stalledCounter: job.stalledCounter,
-        delay: job.delay,
-        priority: job.priority,
-        timestamp: job.timestamp,
-        processedOn: job.processedOn ?? null,
-        finishedOn: job.finishedOn ?? null,
-        processedBy: job.processedBy ?? null,
-        logs: jobLogs.logs,
-        logsCount: jobLogs.count,
-      } satisfies QueueJobDetails;
-    } finally {
-      await queue.close();
-    }
+    return {
+      id: job.id ?? jobId,
+      name: job.name,
+      state,
+      data: job.data,
+      options: job.opts,
+      progress: job.progress,
+      returnValue: job.returnvalue,
+      failedReason: job.failedReason || null,
+      stackTrace: job.stacktrace ?? [],
+      attemptsMade: job.attemptsMade,
+      attemptsStarted: job.attemptsStarted,
+      stalledCounter: job.stalledCounter,
+      delay: job.delay,
+      priority: job.priority,
+      timestamp: job.timestamp,
+      processedOn: job.processedOn ?? null,
+      finishedOn: job.finishedOn ?? null,
+      processedBy: job.processedBy ?? null,
+      logs: jobLogs.logs,
+      logsCount: jobLogs.count,
+    } satisfies QueueJobDetails;
   }
 
   async addQueueJob(queueRef: QueueRef, name: string, data: unknown) {
-    if (!this.connection) {
-      throw new Error("Connect to Redis before adding a job.");
-    }
+    const job = await this.getQueue(queueRef).add(name, data);
 
-    const queue = new Queue(queueRef.name, {
-      connection: this.connection.duplicate(),
-      prefix: queueRef.prefix,
-      skipMetasUpdate: true,
-    });
-
-    try {
-      const job = await queue.add(name, data);
-
-      return {
-        id: job.id ?? "(no id)",
-        name: job.name,
-        status: "wait",
-        timestamp: job.timestamp,
-        data: job.data,
-      } satisfies QueueJobSummary;
-    } finally {
-      await queue.close();
-    }
+    return {
+      id: job.id ?? "(no id)",
+      name: job.name,
+      status: "wait",
+      timestamp: job.timestamp,
+      data: job.data,
+    } satisfies QueueJobSummary;
   }
 
   async obliterateQueue(queueRef: QueueRef) {
-    if (!this.connection) {
-      throw new Error("Connect to Redis before obliterating a queue.");
-    }
-
-    const queue = new Queue(queueRef.name, {
-      connection: this.connection.duplicate(),
-      prefix: queueRef.prefix,
-      skipMetasUpdate: true,
-    });
-
-    try {
-      await queue.obliterate();
-    } finally {
-      await queue.close();
-    }
+    await this.getQueue(queueRef).obliterate();
+    await this.closeQueue(queueRef);
   }
 
   async drainQueue(queueRef: QueueRef) {
-    if (!this.connection) {
-      throw new Error("Connect to Redis before emptying a queue.");
-    }
-
-    const queue = new Queue(queueRef.name, {
-      connection: this.connection.duplicate(),
-      prefix: queueRef.prefix,
-      skipMetasUpdate: true,
-    });
-
-    try {
-      await queue.drain(true);
-    } finally {
-      await queue.close();
-    }
+    await this.getQueue(queueRef).drain(true);
   }
 
   async retryJobs(queueRef: QueueRef, state: RetryableJobState) {
-    if (!this.connection) {
-      throw new Error("Connect to Redis before retrying jobs.");
-    }
-
-    const queue = new Queue(queueRef.name, {
-      connection: this.connection.duplicate(),
-      prefix: queueRef.prefix,
-      skipMetasUpdate: true,
-    });
-
-    try {
-      await queue.retryJobs({ state });
-    } finally {
-      await queue.close();
-    }
+    await this.getQueue(queueRef).retryJobs({ state });
   }
 
   async setQueuePaused(queueRef: QueueRef, paused: boolean) {
-    if (!this.connection) {
-      throw new Error("Connect to Redis before changing the queue status.");
-    }
+    const queue = this.getQueue(queueRef);
 
-    const queue = new Queue(queueRef.name, {
-      connection: this.connection.duplicate(),
-      prefix: queueRef.prefix,
-      skipMetasUpdate: true,
-    });
-
-    try {
-      if (paused) {
-        await queue.pause();
-      } else {
-        await queue.resume();
-      }
-    } finally {
-      await queue.close();
+    if (paused) {
+      await queue.pause();
+    } else {
+      await queue.resume();
     }
   }
 
@@ -467,17 +386,7 @@ class RedisConnection {
       throw new Error("Rate limit duration must be a positive integer.");
     }
 
-    const queue = new Queue(queueRef.name, {
-      connection: this.connection.duplicate(),
-      prefix: queueRef.prefix,
-      skipMetasUpdate: true,
-    });
-
-    try {
-      await queue.rateLimit(durationMs);
-    } finally {
-      await queue.close();
-    }
+    await this.getQueue(queueRef).rateLimit(durationMs);
   }
 }
 
