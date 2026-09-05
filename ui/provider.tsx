@@ -39,6 +39,7 @@ type TokaiActions = {
   addJob: () => Promise<void>;
   drainQueue: () => Promise<void>;
   retryJobs: (state: RetryableJobState) => Promise<void>;
+  setQueuePaused: (queue: QueueRef, paused: boolean) => Promise<void>;
   rateLimitQueue: (durationMs: number) => Promise<void>;
   obliterateQueue: () => Promise<void>;
 };
@@ -72,6 +73,7 @@ export function TokaiProvider({ children }: PropsWithChildren) {
     isAddingJob,
     isDrainingQueue,
     isRetryingJobs,
+    changingQueueStatus,
     isRateLimitingQueue,
     isObliteratingQueue,
     isConnected,
@@ -85,6 +87,7 @@ export function TokaiProvider({ children }: PropsWithChildren) {
       isAddingJob ||
       isDrainingQueue ||
       isRetryingJobs ||
+      changingQueueStatus ||
       isObliteratingQueue ||
       isLoadingJobs
     ) {
@@ -147,6 +150,7 @@ export function TokaiProvider({ children }: PropsWithChildren) {
     isConnected,
     isDrainingQueue,
     isRetryingJobs,
+    changingQueueStatus,
     isLoadingJobs,
     isObliteratingQueue,
     jobsPage,
@@ -250,6 +254,7 @@ export function TokaiProvider({ children }: PropsWithChildren) {
       isAddingJob ||
       isDrainingQueue ||
       isRetryingJobs ||
+      changingQueueStatus ||
       isObliteratingQueue
     ) {
       return;
@@ -268,6 +273,7 @@ export function TokaiProvider({ children }: PropsWithChildren) {
       isAddingJob ||
       isDrainingQueue ||
       isRetryingJobs ||
+      changingQueueStatus ||
       isObliteratingQueue
     ) {
       return;
@@ -285,6 +291,7 @@ export function TokaiProvider({ children }: PropsWithChildren) {
       isAddingJob ||
       isDrainingQueue ||
       isRetryingJobs ||
+      changingQueueStatus ||
       isObliteratingQueue
     ) {
       return;
@@ -304,6 +311,7 @@ export function TokaiProvider({ children }: PropsWithChildren) {
       retryingJobId ||
       isDrainingQueue ||
       isRetryingJobs ||
+      changingQueueStatus ||
       isObliteratingQueue
     ) {
       return;
@@ -333,6 +341,7 @@ export function TokaiProvider({ children }: PropsWithChildren) {
       isAddingJob ||
       isDrainingQueue ||
       isRetryingJobs ||
+      changingQueueStatus ||
       isObliteratingQueue
     ) {
       return;
@@ -361,6 +370,7 @@ export function TokaiProvider({ children }: PropsWithChildren) {
       isAddingJob ||
       isDrainingQueue ||
       isRetryingJobs ||
+      changingQueueStatus ||
       isObliteratingQueue
     ) {
       return;
@@ -396,6 +406,7 @@ export function TokaiProvider({ children }: PropsWithChildren) {
       retryingJobId ||
       isDrainingQueue ||
       isRetryingJobs ||
+      changingQueueStatus ||
       isObliteratingQueue
     ) {
       return;
@@ -437,6 +448,7 @@ export function TokaiProvider({ children }: PropsWithChildren) {
       isObliteratingQueue ||
       isDrainingQueue ||
       isRetryingJobs ||
+      changingQueueStatus ||
       deletingJobId ||
       retryingJobId ||
       isAddingJob
@@ -465,6 +477,7 @@ export function TokaiProvider({ children }: PropsWithChildren) {
       isDrainingQueue ||
       isObliteratingQueue ||
       isRetryingJobs ||
+      changingQueueStatus ||
       deletingJobId ||
       retryingJobId ||
       isAddingJob
@@ -497,6 +510,7 @@ export function TokaiProvider({ children }: PropsWithChildren) {
     if (
       !selectedQueue ||
       isRetryingJobs ||
+      changingQueueStatus ||
       isRateLimitingQueue ||
       isDrainingQueue ||
       isObliteratingQueue ||
@@ -528,12 +542,50 @@ export function TokaiProvider({ children }: PropsWithChildren) {
     }
   };
 
+  const setQueuePaused = async (queue: QueueRef, paused: boolean) => {
+    if (
+      changingQueueStatus ||
+      isDrainingQueue ||
+      isRetryingJobs ||
+      isObliteratingQueue ||
+      deletingJobId ||
+      retryingJobId ||
+      isAddingJob
+    ) {
+      return;
+    }
+
+    dispatch({ type: "queueStatusChangeStarted", queue });
+
+    try {
+      await redisConnection.setQueuePaused(queue, paused);
+      const [meta, counts] = await Promise.all([
+        redisConnection.getQueueMeta(queue),
+        redisConnection.getQueueJobCounts(queue),
+      ]);
+      dispatch({
+        type: "queueStatusChanged",
+        queue,
+        paused,
+        queueInfo: { ...queue, meta, counts },
+      });
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : "Unknown error";
+      dispatch({
+        type: "queueStatusChangeFailed",
+        queue,
+        message: `Could not ${paused ? "pause" : "resume"} queue: ${reason}`,
+      });
+    }
+  };
+
   const rateLimitQueue = async (durationMs: number) => {
     if (
       !selectedQueue ||
       isRateLimitingQueue ||
       isDrainingQueue ||
       isRetryingJobs ||
+      changingQueueStatus ||
       isObliteratingQueue ||
       deletingJobId ||
       retryingJobId ||
@@ -580,6 +632,7 @@ export function TokaiProvider({ children }: PropsWithChildren) {
     addJob,
     drainQueue,
     retryJobs,
+    setQueuePaused,
     rateLimitQueue,
     obliterateQueue,
   };

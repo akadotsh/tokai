@@ -5,7 +5,9 @@ function getMessageColor(message: string) {
   if (
     message.startsWith("Found ") ||
     message.startsWith("Metadata for") ||
-    message.startsWith("Obliterated ")
+    message.startsWith("Obliterated ") ||
+    message.startsWith("Paused ") ||
+    message.startsWith("Resumed ")
   ) {
     return "#4ADE80";
   }
@@ -20,8 +22,8 @@ function getMessageColor(message: string) {
 export function Queues() {
   const [searchQuery, setSearchQuery] = useState("");
   const {
-    state: { queues, message },
-    actions: { fetchQueues, fetchJobs },
+    state: { queues, changingQueueStatus, message },
+    actions: { fetchQueues, fetchJobs, setQueuePaused },
   } = useTokai();
   const normalizedSearchQuery = searchQuery.trim().toLowerCase();
   const filteredQueues = normalizedSearchQuery
@@ -97,7 +99,29 @@ export function Queues() {
                     <text fg="#F3F6FF">{name}</text>
                     {meta.paused ? <text fg="#FACC15">● Paused</text> : null}
                   </box>
-                  <text fg="#8EA2C9">→</text>
+                  <box flexDirection="row" alignItems="center" gap={2}>
+                    <box
+                      width={3}
+                      height={1}
+                      alignItems="center"
+                      justifyContent="center"
+                      onMouseDown={(event) => {
+                        event.stopPropagation();
+                        if (changingQueueStatus) return;
+                        void setQueuePaused({ name, prefix }, !meta.paused);
+                      }}
+                    >
+                      <text fg={meta.paused ? "#4ADE80" : "#FACC15"}>
+                        {changingQueueStatus?.name === name &&
+                        changingQueueStatus.prefix === prefix
+                          ? "◌"
+                          : meta.paused
+                            ? "▶"
+                            : "⏸"}
+                      </text>
+                    </box>
+                    <text fg="#8EA2C9">→</text>
+                  </box>
                 </box>
                 <box flexDirection="row" gap={2}>
                   <text fg="#4ADE80">completed {counts.completed}</text>

@@ -32,6 +32,7 @@ export type AppState = {
   isAddingJob: boolean;
   isDrainingQueue: boolean;
   isRetryingJobs: boolean;
+  changingQueueStatus: QueueRef | null;
   isRateLimitingQueue: boolean;
   isObliteratingQueue: boolean;
   message: string;
@@ -98,6 +99,14 @@ export type AppAction =
       result: QueueJobsPage;
     }
   | { type: "jobsRetryFailed"; message: string }
+  | { type: "queueStatusChangeStarted"; queue: QueueRef }
+  | {
+      type: "queueStatusChanged";
+      queue: QueueRef;
+      paused: boolean;
+      queueInfo: JobCounts;
+    }
+  | { type: "queueStatusChangeFailed"; queue: QueueRef; message: string }
   | { type: "queueRateLimitStarted" }
   | { type: "queueRateLimited"; queue: QueueRef; durationMs: number }
   | { type: "queueRateLimitFailed"; message: string }
@@ -130,6 +139,7 @@ export function createInitialState(isConnected: boolean): AppState {
     isAddingJob: false,
     isDrainingQueue: false,
     isRetryingJobs: false,
+    changingQueueStatus: null,
     isRateLimitingQueue: false,
     isObliteratingQueue: false,
     message: "",
@@ -252,6 +262,7 @@ export function reducer(state: AppState, action: AppAction): AppState {
         newJobName: "",
         newJobData: "{}",
         isRetryingJobs: false,
+        changingQueueStatus: null,
         message: `Queue "${action.queue.name}" is no longer available.`,
       };
     case "showQueues":
@@ -277,6 +288,7 @@ export function reducer(state: AppState, action: AppAction): AppState {
         isAddingJob: false,
         isDrainingQueue: false,
         isRetryingJobs: false,
+        changingQueueStatus: null,
         isRateLimitingQueue: false,
         isObliteratingQueue: false,
       };
@@ -433,6 +445,32 @@ export function reducer(state: AppState, action: AppAction): AppState {
         isRetryingJobs: false,
         jobsMessage: action.message,
       };
+    case "queueStatusChangeStarted":
+      return {
+        ...state,
+        changingQueueStatus: action.queue,
+        jobsMessage: "",
+        message: "",
+      };
+    case "queueStatusChanged":
+      if (!isSameQueue(state.changingQueueStatus, action.queue)) return state;
+      return {
+        ...state,
+        queues: state.queues.map((queue) =>
+          isSameQueue(queue, action.queue) ? action.queueInfo : queue,
+        ),
+        changingQueueStatus: null,
+        jobsMessage: `${action.paused ? "Paused" : "Resumed"} queue "${action.queue.name}".`,
+        message: `${action.paused ? "Paused" : "Resumed"} queue "${action.queue.name}".`,
+      };
+    case "queueStatusChangeFailed":
+      if (!isSameQueue(state.changingQueueStatus, action.queue)) return state;
+      return {
+        ...state,
+        changingQueueStatus: null,
+        jobsMessage: action.message,
+        message: action.message,
+      };
     case "queueRateLimitStarted":
       return { ...state, isRateLimitingQueue: true, jobsMessage: "" };
     case "queueRateLimited":
@@ -468,6 +506,7 @@ export function reducer(state: AppState, action: AppAction): AppState {
         jobDetailsMessage: "",
         retryingJobId: null,
         isRetryingJobs: false,
+        changingQueueStatus: null,
         isObliteratingQueue: false,
         message: `Obliterated queue "${action.queue.name}".`,
       };

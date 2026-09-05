@@ -76,6 +76,7 @@ export function Jobs() {
       retryingJobId,
       isDrainingQueue,
       isRetryingJobs,
+      changingQueueStatus,
       isRateLimitingQueue,
       isObliteratingQueue,
     },
@@ -87,6 +88,7 @@ export function Jobs() {
       openAddJob,
       drainQueue,
       retryJobs,
+      setQueuePaused,
       rateLimitQueue,
       obliterateQueue,
       showPreviousJobsPage,
@@ -104,6 +106,7 @@ export function Jobs() {
     (queue) =>
       queue.name === selectedQueue.name && queue.prefix === selectedQueue.prefix,
   );
+  const isQueuePaused = selectedQueueInfo?.meta.paused ?? false;
 
   const closeQueueInfo = () => {
     setIsQueueInfoOpen(false);
@@ -438,13 +441,35 @@ export function Jobs() {
                 right={0}
                 zIndex={2_000}
                 width={20}
-                height={9}
+                height={11}
                 border
                 borderColor="#253552"
                 backgroundColor="#000000"
                 flexDirection="column"
                 gap={1}
               >
+                <box
+                  width="100%"
+                  height={1}
+                  paddingLeft={1}
+                  paddingRight={1}
+                  alignItems="flex-start"
+                  onMouseDown={() => {
+                    if (changingQueueStatus) return;
+                    setIsQueueOptionsOpen(false);
+                    void setQueuePaused(selectedQueue, !isQueuePaused);
+                  }}
+                >
+                  <text fg="#C7D2E9">
+                    {changingQueueStatus
+                      ? isQueuePaused
+                        ? "Resuming..."
+                        : "Pausing..."
+                      : isQueuePaused
+                        ? "Resume queue"
+                        : "Pause queue"}
+                  </text>
+                </box>
                 <box
                   width="100%"
                   height={1}
@@ -657,6 +682,8 @@ export function Jobs() {
             jobsMessage.startsWith("Added ") ||
             jobsMessage.startsWith("Emptied ") ||
             jobsMessage.startsWith("Retried ") ||
+            jobsMessage.startsWith("Paused ") ||
+            jobsMessage.startsWith("Resumed ") ||
             jobsMessage.startsWith("Rate limited ")
               ? "#4ADE80"
               : "#FB7185"

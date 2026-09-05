@@ -436,6 +436,28 @@ class RedisConnection {
     }
   }
 
+  async setQueuePaused(queueRef: QueueRef, paused: boolean) {
+    if (!this.connection) {
+      throw new Error("Connect to Redis before changing the queue status.");
+    }
+
+    const queue = new Queue(queueRef.name, {
+      connection: this.connection.duplicate(),
+      prefix: queueRef.prefix,
+      skipMetasUpdate: true,
+    });
+
+    try {
+      if (paused) {
+        await queue.pause();
+      } else {
+        await queue.resume();
+      }
+    } finally {
+      await queue.close();
+    }
+  }
+
   async rateLimitQueue(queueRef: QueueRef, durationMs: number) {
     if (!this.connection) {
       throw new Error("Connect to Redis before rate limiting a queue.");
