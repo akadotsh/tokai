@@ -26,7 +26,7 @@ export function Header() {
         justifyContent="center"
         onMouseDown={disconnect}
       >
-        <text fg="#FFFFFF">Disconnect</text>
+        <text fg="#FFFFFF">⏻ Disconnect</text>
       </box>
     </box>
   );

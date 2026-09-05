@@ -48,7 +48,7 @@ export function Queues() {
           justifyContent="center"
           onMouseDown={fetchQueues}
         >
-          <text fg="#FFFFFF">Refresh</text>
+          <text fg="#FFFFFF">↻ Refresh</text>
         </box>
       </box>
 
