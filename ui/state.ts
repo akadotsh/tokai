@@ -6,6 +6,7 @@ import type {
   QueueJobSummary,
   QueueRef,
   RetryableJobState,
+  CleanableJobStatus,
 } from "../server/index";
 
 export type AppState = {
@@ -32,6 +33,7 @@ export type AppState = {
   newJobData: string;
   isAddingJob: boolean;
   isDrainingQueue: boolean;
+  isCleaningJobs: boolean;
   isRetryingJobs: boolean;
   changingQueueStatus: QueueRef | null;
   isSettingQueueConcurrency: boolean;
@@ -95,6 +97,16 @@ export type AppAction =
   | { type: "queueDrainStarted" }
   | { type: "queueDrained"; queue: QueueRef; result: QueueJobsPage }
   | { type: "queueDrainFailed"; message: string }
+  | { type: "queueCleanStarted" }
+  | {
+      type: "queueCleaned";
+      queue: QueueRef;
+      status: CleanableJobStatus;
+      removedCount: number;
+      result: QueueJobsPage;
+      queueInfo: JobCounts;
+    }
+  | { type: "queueCleanFailed"; message: string }
   | { type: "jobsRetryStarted" }
   | {
       type: "jobsRetried";
@@ -151,6 +163,7 @@ export function createInitialState(isConnected: boolean): AppState {
     newJobData: "{}",
     isAddingJob: false,
     isDrainingQueue: false,
+    isCleaningJobs: false,
     isRetryingJobs: false,
     changingQueueStatus: null,
     isSettingQueueConcurrency: false,

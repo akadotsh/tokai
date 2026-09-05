@@ -7,6 +7,7 @@ import {
 } from "react";
 import {
   redisConnection,
+  type CleanableJobStatus,
   type QueueJobStatus,
   type QueueRef,
   type RetryableJobState,
@@ -40,6 +41,11 @@ type TokaiActions = {
   setNewJobData: (value: string) => void;
   addJob: () => Promise<void>;
   drainQueue: () => Promise<void>;
+  cleanJobs: (
+    status: CleanableJobStatus,
+    graceMs: number,
+    limit: number,
+  ) => Promise<void>;
   retryJobs: (state: RetryableJobState) => Promise<void>;
   setQueuePaused: (queue: QueueRef, paused: boolean) => Promise<void>;
   setQueueConcurrency: (concurrency: number) => Promise<void>;
@@ -76,6 +82,7 @@ export function TokaiProvider({ children }: PropsWithChildren) {
     newJobData,
     isAddingJob,
     isDrainingQueue,
+    isCleaningJobs,
     isRetryingJobs,
     changingQueueStatus,
     isSettingQueueConcurrency,
@@ -91,6 +98,7 @@ export function TokaiProvider({ children }: PropsWithChildren) {
       retryingJobId ||
       isAddingJob ||
       isDrainingQueue ||
+      isCleaningJobs ||
       isRetryingJobs ||
       changingQueueStatus ||
       isSettingQueueConcurrency ||
@@ -156,6 +164,7 @@ export function TokaiProvider({ children }: PropsWithChildren) {
     isAddingJob,
     isConnected,
     isDrainingQueue,
+    isCleaningJobs,
     isRetryingJobs,
     changingQueueStatus,
     isSettingQueueConcurrency,
@@ -589,6 +598,65 @@ export function TokaiProvider({ children }: PropsWithChildren) {
     }
   };
 
+  const cleanJobs = async (
+    status: CleanableJobStatus,
+    graceMs: number,
+    limit: number,
+  ) => {
+    if (
+      !selectedQueue ||
+      isCleaningJobs ||
+      isDrainingQueue ||
+      isRetryingJobs ||
+      isRateLimitingQueue ||
+      isSettingQueueConcurrency ||
+      changingQueueStatus ||
+      isObliteratingQueue ||
+      deletingJobId ||
+      retryingJobId ||
+      isAddingJob
+    ) {
+      return;
+    }
+
+    const queue = selectedQueue;
+    dispatch({ type: "queueCleanStarted" });
+
+    try {
+      const removedJobIds = await redisConnection.cleanQueueJobs(
+        queue,
+        graceMs,
+        limit,
+        status,
+      );
+      const [result, meta, counts] = await Promise.all([
+        redisConnection.getQueueJobs(
+          queue,
+          1,
+          JOBS_PAGE_SIZE,
+          jobsStatusFilter,
+          jobsSearchQuery,
+        ),
+        redisConnection.getQueueMeta(queue),
+        redisConnection.getQueueJobCounts(queue),
+      ]);
+      dispatch({
+        type: "queueCleaned",
+        queue,
+        status,
+        removedCount: removedJobIds.length,
+        result,
+        queueInfo: { ...queue, meta, counts },
+      });
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : "Unknown error";
+      dispatch({
+        type: "queueCleanFailed",
+        message: `Could not clean queue jobs: ${reason}`,
+      });
+    }
+  };
+
   const setQueuePaused = async (queue: QueueRef, paused: boolean) => {
     if (
       changingQueueStatus ||
@@ -719,6 +787,7 @@ export function TokaiProvider({ children }: PropsWithChildren) {
     setNewJobData: (value) => dispatch({ type: "newJobDataChanged", value }),
     addJob,
     drainQueue,
+    cleanJobs,
     retryJobs,
     setQueuePaused,
     setQueueConcurrency,

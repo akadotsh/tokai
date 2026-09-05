@@ -2,9 +2,11 @@ import { SyntaxStyle } from "@opentui/core";
 import { useEffect, useState } from "react";
 import {
   queueJobStatuses,
+  type CleanableJobStatus,
   type QueueJobStatus,
 } from "../../server/index";
 import { useTokai } from "../provider";
+import { CleanJobsDialog } from "./CleanJobsDialog";
 import { ConfirmationDialog } from "./ConfirmationDialog";
 import { ConcurrencyDialog } from "./ConcurrencyDialog";
 import { JobDetailsModal } from "./JobDetailsModal";
@@ -61,6 +63,12 @@ export function Jobs() {
   const [isRateLimitDialogOpen, setIsRateLimitDialogOpen] = useState(false);
   const [rateLimitDuration, setRateLimitDuration] = useState("");
   const [rateLimitError, setRateLimitError] = useState("");
+  const [isCleanJobsDialogOpen, setIsCleanJobsDialogOpen] = useState(false);
+  const [cleanJobsStatus, setCleanJobsStatus] =
+    useState<CleanableJobStatus>("completed");
+  const [cleanJobsGraceMs, setCleanJobsGraceMs] = useState("86400000");
+  const [cleanJobsLimit, setCleanJobsLimit] = useState("1000");
+  const [cleanJobsError, setCleanJobsError] = useState("");
   const [isDrainConfirmationOpen, setIsDrainConfirmationOpen] = useState(false);
   const [isRetryConfirmationOpen, setIsRetryConfirmationOpen] = useState(false);
   const [isObliterateConfirmationOpen, setIsObliterateConfirmationOpen] =
@@ -81,6 +89,7 @@ export function Jobs() {
       deletingJobId,
       retryingJobId,
       isDrainingQueue,
+      isCleaningJobs,
       isRetryingJobs,
       changingQueueStatus,
       isSettingQueueConcurrency,
@@ -94,6 +103,7 @@ export function Jobs() {
       retryJob,
       openAddJob,
       drainQueue,
+      cleanJobs,
       retryJobs,
       setQueuePaused,
       setQueueConcurrency,
@@ -186,6 +196,27 @@ export function Jobs() {
 
     await drainQueue();
     setIsDrainConfirmationOpen(false);
+  };
+
+  const confirmCleanJobs = async () => {
+    if (isCleaningJobs) return;
+
+    const graceMs = Number(cleanJobsGraceMs);
+    const limit = Number(cleanJobsLimit);
+
+    if (!Number.isInteger(graceMs) || graceMs < 0) {
+      setCleanJobsError("Minimum age must be a non-negative whole number.");
+      return;
+    }
+
+    if (!Number.isInteger(limit) || limit <= 0) {
+      setCleanJobsError("Maximum jobs must be a positive whole number.");
+      return;
+    }
+
+    setCleanJobsError("");
+    await cleanJobs(cleanJobsStatus, graceMs, limit);
+    setIsCleanJobsDialogOpen(false);
   };
 
   const confirmRetryFailedJobs = async () => {
@@ -475,7 +506,7 @@ export function Jobs() {
                 right={0}
                 zIndex={2_000}
                 width={20}
-                height={13}
+                height={15}
                 border
                 borderColor="#253552"
                 backgroundColor="#000000"
@@ -537,6 +568,23 @@ export function Jobs() {
                   }}
                 >
                   <text fg="#C7D2E9">Set concurrency</text>
+                </box>
+                <box
+                  width="100%"
+                  height={1}
+                  paddingLeft={1}
+                  paddingRight={1}
+                  alignItems="flex-start"
+                  onMouseDown={() => {
+                    setIsQueueOptionsOpen(false);
+                    setCleanJobsStatus("completed");
+                    setCleanJobsGraceMs("86400000");
+                    setCleanJobsLimit("1000");
+                    setCleanJobsError("");
+                    setIsCleanJobsDialogOpen(true);
+                  }}
+                >
+                  <text fg="#C7D2E9">Clean jobs</text>
                 </box>
                 <box
                   width="100%"
@@ -781,6 +829,7 @@ export function Jobs() {
           fg={
             jobsMessage.startsWith("Deleted ") ||
             jobsMessage.startsWith("Added ") ||
+            jobsMessage.startsWith("Cleaned ") ||
             jobsMessage.startsWith("Emptied ") ||
             jobsMessage.startsWith("Retried ") ||
             jobsMessage.startsWith("Paused ") ||
@@ -821,6 +870,27 @@ export function Jobs() {
         }}
         onCancel={() => setIsConcurrencyDialogOpen(false)}
         onConfirm={() => void confirmQueueConcurrency()}
+      />
+
+      <CleanJobsDialog
+        isOpen={isCleanJobsDialogOpen}
+        queueName={selectedQueue.name}
+        status={cleanJobsStatus}
+        graceMs={cleanJobsGraceMs}
+        limit={cleanJobsLimit}
+        error={cleanJobsError}
+        isPending={isCleaningJobs}
+        onStatusChange={setCleanJobsStatus}
+        onGraceMsChange={(value) => {
+          setCleanJobsGraceMs(value);
+          setCleanJobsError("");
+        }}
+        onLimitChange={(value) => {
+          setCleanJobsLimit(value);
+          setCleanJobsError("");
+        }}
+        onCancel={() => setIsCleanJobsDialogOpen(false)}
+        onConfirm={() => void confirmCleanJobs()}
       />
 
       <ConfirmationDialog

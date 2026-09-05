@@ -25,6 +25,12 @@ export const queueJobStatuses = [
 
 export type QueueJobStatus = (typeof queueJobStatuses)[number];
 export type RetryableJobState = "failed" | "completed";
+export type CleanableJobStatus =
+  | "completed"
+  | "failed"
+  | "delayed"
+  | "wait"
+  | "prioritized";
 
 export type JobCounts = QueueRef & {
   meta: QueueMeta;
@@ -419,6 +425,23 @@ class RedisConnection {
 
   async drainQueue(queueRef: QueueRef) {
     await this.getQueue(queueRef).drain(true);
+  }
+
+  async cleanQueueJobs(
+    queueRef: QueueRef,
+    graceMs: number,
+    limit: number,
+    status: CleanableJobStatus,
+  ) {
+    if (!Number.isInteger(graceMs) || graceMs < 0) {
+      throw new Error("Clean grace period must be a non-negative integer.");
+    }
+
+    if (!Number.isInteger(limit) || limit <= 0) {
+      throw new Error("Clean limit must be a positive integer.");
+    }
+
+    return this.getQueue(queueRef).clean(graceMs, limit, status);
   }
 
   async retryJobs(queueRef: QueueRef, state: RetryableJobState) {

@@ -93,4 +93,36 @@ describe("reducer", () => {
       'Set concurrency for queue "emails" to 8.',
     );
   });
+
+  test("refreshes jobs and queue counts after cleaning", () => {
+    const currentQueueInfo = createQueueInfo();
+    currentQueueInfo.counts.completed = 5;
+    const updatedQueueInfo = createQueueInfo();
+    updatedQueueInfo.counts.completed = 2;
+    const result = createJobsPage(1);
+    result.total = 2;
+    const state = {
+      ...createInitialState(true),
+      queues: [currentQueueInfo],
+      selectedQueue: queue,
+      jobsTotal: 5,
+      isCleaningJobs: true,
+    };
+
+    const nextState = reducer(state, {
+      type: "queueCleaned",
+      queue,
+      status: "completed",
+      removedCount: 3,
+      result,
+      queueInfo: updatedQueueInfo,
+    });
+
+    expect(nextState.queues).toEqual([updatedQueueInfo]);
+    expect(nextState.jobsTotal).toBe(2);
+    expect(nextState.isCleaningJobs).toBeFalse();
+    expect(nextState.jobsMessage).toBe(
+      'Cleaned 3 completed jobs from queue "emails".',
+    );
+  });
 });

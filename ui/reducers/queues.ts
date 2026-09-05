@@ -39,6 +39,7 @@ export function reduceQueueState(state: AppState, action: AppAction): AppState {
         isAddJobScreenOpen: false,
         newJobName: "",
         newJobData: "{}",
+        isCleaningJobs: false,
         isRetryingJobs: false,
         changingQueueStatus: null,
         isSettingQueueConcurrency: false,
@@ -67,6 +68,7 @@ export function reduceQueueState(state: AppState, action: AppAction): AppState {
         newJobData: "{}",
         isAddingJob: false,
         isDrainingQueue: false,
+        isCleaningJobs: false,
         isRetryingJobs: false,
         changingQueueStatus: null,
         isSettingQueueConcurrency: false,
@@ -90,6 +92,28 @@ export function reduceQueueState(state: AppState, action: AppAction): AppState {
       return {
         ...state,
         isDrainingQueue: false,
+        jobsMessage: action.message,
+      };
+    case "queueCleanStarted":
+      return { ...state, isCleaningJobs: true, jobsMessage: "" };
+    case "queueCleaned":
+      if (!isSameQueue(state.selectedQueue, action.queue)) return state;
+      return {
+        ...state,
+        queues: state.queues.map((queue) =>
+          isSameQueue(queue, action.queue) ? action.queueInfo : queue,
+        ),
+        jobs: action.result.jobs,
+        jobsPage: action.result.page,
+        jobsTotal: action.result.total,
+        hasNextJobsPage: action.result.hasNextPage,
+        isCleaningJobs: false,
+        jobsMessage: `Cleaned ${action.removedCount} ${action.status} job${action.removedCount === 1 ? "" : "s"} from queue "${action.queue.name}".`,
+      };
+    case "queueCleanFailed":
+      return {
+        ...state,
+        isCleaningJobs: false,
         jobsMessage: action.message,
       };
     case "jobsRetryStarted":
@@ -190,6 +214,7 @@ export function reduceQueueState(state: AppState, action: AppAction): AppState {
         isLoadingJobDetails: false,
         jobDetailsMessage: "",
         retryingJobId: null,
+        isCleaningJobs: false,
         isRetryingJobs: false,
         changingQueueStatus: null,
         isSettingQueueConcurrency: false,
