@@ -23,8 +23,10 @@ type TokaiActions = {
     queue: QueueRef,
     page?: number,
     status?: QueueJobStatus | null,
+    searchQuery?: string,
   ) => Promise<void>;
   filterJobsByStatus: (status: QueueJobStatus | null) => Promise<void>;
+  searchJobs: (query: string) => Promise<void>;
   showPreviousJobsPage: () => Promise<void>;
   showNextJobsPage: () => Promise<void>;
   showQueues: () => void;
@@ -65,6 +67,7 @@ export function TokaiProvider({ children }: PropsWithChildren) {
     jobsPage,
     hasNextJobsPage,
     jobsStatusFilter,
+    jobsSearchQuery,
     isLoadingJobs,
     deletingJobId,
     retryingJobId,
@@ -124,6 +127,7 @@ export function TokaiProvider({ children }: PropsWithChildren) {
             jobsPage,
             JOBS_PAGE_SIZE,
             jobsStatusFilter,
+            jobsSearchQuery,
           );
 
           if (isActive) {
@@ -154,6 +158,7 @@ export function TokaiProvider({ children }: PropsWithChildren) {
     isLoadingJobs,
     isObliteratingQueue,
     jobsPage,
+    jobsSearchQuery,
     jobsStatusFilter,
     pollingIntervalMs,
     selectedQueue?.name,
@@ -221,8 +226,10 @@ export function TokaiProvider({ children }: PropsWithChildren) {
     queue: QueueRef,
     page = 1,
     status: QueueJobStatus | null = null,
+    searchQuery = "",
   ) => {
-    dispatch({ type: "jobsLoading", queue, page, status });
+    const query = searchQuery.trim();
+    dispatch({ type: "jobsLoading", queue, page, status, searchQuery: query });
 
     try {
       const result = await redisConnection.getQueueJobs(
@@ -230,6 +237,7 @@ export function TokaiProvider({ children }: PropsWithChildren) {
         page,
         JOBS_PAGE_SIZE,
         status,
+        query,
       );
       dispatch({ type: "jobsLoaded", queue, result });
     } catch (error) {
@@ -239,6 +247,7 @@ export function TokaiProvider({ children }: PropsWithChildren) {
         queue,
         page,
         status,
+        searchQuery: query,
         message: `Could not fetch jobs: ${reason}`,
       });
     }
@@ -260,7 +269,28 @@ export function TokaiProvider({ children }: PropsWithChildren) {
       return;
     }
 
-    await fetchJobs(selectedQueue, 1, status);
+    await fetchJobs(selectedQueue, 1, status, jobsSearchQuery);
+  };
+
+  const searchJobs = async (searchQuery: string) => {
+    const query = searchQuery.trim();
+
+    if (
+      !selectedQueue ||
+      query === jobsSearchQuery ||
+      isLoadingJobs ||
+      deletingJobId ||
+      retryingJobId ||
+      isAddingJob ||
+      isDrainingQueue ||
+      isRetryingJobs ||
+      changingQueueStatus ||
+      isObliteratingQueue
+    ) {
+      return;
+    }
+
+    await fetchJobs(selectedQueue, 1, jobsStatusFilter, query);
   };
 
   const showPreviousJobsPage = async () => {
@@ -278,7 +308,12 @@ export function TokaiProvider({ children }: PropsWithChildren) {
     ) {
       return;
     }
-    await fetchJobs(selectedQueue, jobsPage - 1, jobsStatusFilter);
+    await fetchJobs(
+      selectedQueue,
+      jobsPage - 1,
+      jobsStatusFilter,
+      jobsSearchQuery,
+    );
   };
 
   const showNextJobsPage = async () => {
@@ -296,7 +331,12 @@ export function TokaiProvider({ children }: PropsWithChildren) {
     ) {
       return;
     }
-    await fetchJobs(selectedQueue, jobsPage + 1, jobsStatusFilter);
+    await fetchJobs(
+      selectedQueue,
+      jobsPage + 1,
+      jobsStatusFilter,
+      jobsSearchQuery,
+    );
   };
 
   const showQueues = () => {
@@ -386,6 +426,7 @@ export function TokaiProvider({ children }: PropsWithChildren) {
         1,
         JOBS_PAGE_SIZE,
         jobsStatusFilter,
+        jobsSearchQuery,
       );
       dispatch({ type: "jobRetried", queue, jobId, result });
     } catch (error) {
@@ -495,6 +536,7 @@ export function TokaiProvider({ children }: PropsWithChildren) {
         1,
         JOBS_PAGE_SIZE,
         jobsStatusFilter,
+        jobsSearchQuery,
       );
       dispatch({ type: "queueDrained", queue, result });
     } catch (error) {
@@ -531,6 +573,7 @@ export function TokaiProvider({ children }: PropsWithChildren) {
         1,
         JOBS_PAGE_SIZE,
         jobsStatusFilter,
+        jobsSearchQuery,
       );
       dispatch({ type: "jobsRetried", queue, state, result });
     } catch (error) {
@@ -618,6 +661,7 @@ export function TokaiProvider({ children }: PropsWithChildren) {
     fetchQueues,
     fetchJobs,
     filterJobsByStatus,
+    searchJobs,
     showPreviousJobsPage,
     showNextJobsPage,
     showQueues,

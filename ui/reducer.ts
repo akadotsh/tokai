@@ -18,6 +18,7 @@ export type AppState = {
   jobsTotal: number;
   hasNextJobsPage: boolean;
   jobsStatusFilter: QueueJobStatus | null;
+  jobsSearchQuery: string;
   jobsMessage: string;
   isLoadingJobs: boolean;
   deletingJobId: string | null;
@@ -54,6 +55,7 @@ export type AppAction =
       queue: QueueRef;
       page: number;
       status: QueueJobStatus | null;
+      searchQuery: string;
     }
   | { type: "jobsLoaded"; queue: QueueRef; result: QueueJobsPage }
   | { type: "jobsRefreshed"; queue: QueueRef; result: QueueJobsPage }
@@ -62,6 +64,7 @@ export type AppAction =
       queue: QueueRef;
       page: number;
       status: QueueJobStatus | null;
+      searchQuery: string;
       message: string;
     }
   | { type: "selectedQueueMissing"; queue: QueueRef }
@@ -125,6 +128,7 @@ export function createInitialState(isConnected: boolean): AppState {
     jobsTotal: 0,
     hasNextJobsPage: false,
     jobsStatusFilter: null,
+    jobsSearchQuery: "",
     jobsMessage: "",
     isLoadingJobs: false,
     deletingJobId: null,
@@ -149,6 +153,15 @@ export function createInitialState(isConnected: boolean): AppState {
 
 function isSameQueue(left: QueueRef | null, right: QueueRef) {
   return left?.name === right.name && left.prefix === right.prefix;
+}
+
+function jobMatchesSearch(job: QueueJobSummary, searchQuery: string) {
+  const query = searchQuery.toLowerCase();
+  return (
+    !query ||
+    job.id.toLowerCase().includes(query) ||
+    job.name.toLowerCase().includes(query)
+  );
 }
 
 export function reducer(state: AppState, action: AppAction): AppState {
@@ -189,6 +202,7 @@ export function reducer(state: AppState, action: AppAction): AppState {
           : 0,
         hasNextJobsPage: false,
         jobsStatusFilter: action.status,
+        jobsSearchQuery: action.searchQuery,
         jobsMessage: "",
         isLoadingJobs: true,
         isAddJobScreenOpen: false,
@@ -200,7 +214,8 @@ export function reducer(state: AppState, action: AppAction): AppState {
       if (
         !isSameQueue(state.selectedQueue, action.queue) ||
         state.jobsPage !== action.result.page ||
-        state.jobsStatusFilter !== action.result.status
+        state.jobsStatusFilter !== action.result.status ||
+        state.jobsSearchQuery !== action.result.searchQuery
       ) {
         return state;
       }
@@ -215,7 +230,8 @@ export function reducer(state: AppState, action: AppAction): AppState {
       if (
         !isSameQueue(state.selectedQueue, action.queue) ||
         state.jobsPage !== action.result.page ||
-        state.jobsStatusFilter !== action.result.status
+        state.jobsStatusFilter !== action.result.status ||
+        state.jobsSearchQuery !== action.result.searchQuery
       ) {
         return state;
       }
@@ -229,7 +245,8 @@ export function reducer(state: AppState, action: AppAction): AppState {
       if (
         !isSameQueue(state.selectedQueue, action.queue) ||
         state.jobsPage !== action.page ||
-        state.jobsStatusFilter !== action.status
+        state.jobsStatusFilter !== action.status ||
+        state.jobsSearchQuery !== action.searchQuery
       ) {
         return state;
       }
@@ -251,6 +268,7 @@ export function reducer(state: AppState, action: AppAction): AppState {
         jobsTotal: 0,
         hasNextJobsPage: false,
         jobsStatusFilter: null,
+        jobsSearchQuery: "",
         jobsMessage: "",
         isLoadingJobs: false,
         retryingJobId: null,
@@ -274,6 +292,7 @@ export function reducer(state: AppState, action: AppAction): AppState {
         jobsTotal: 0,
         hasNextJobsPage: false,
         jobsStatusFilter: null,
+        jobsSearchQuery: "",
         jobsMessage: "",
         isLoadingJobs: false,
         deletingJobId: null,
@@ -395,8 +414,9 @@ export function reducer(state: AppState, action: AppAction): AppState {
       return {
         ...state,
         jobsTotal:
-          state.jobsStatusFilter === null ||
-          state.jobsStatusFilter === action.job.status
+          (state.jobsStatusFilter === null ||
+            state.jobsStatusFilter === action.job.status) &&
+          jobMatchesSearch(action.job, state.jobsSearchQuery)
             ? state.jobsTotal + 1
             : state.jobsTotal,
         isAddJobScreenOpen: false,
@@ -500,6 +520,7 @@ export function reducer(state: AppState, action: AppAction): AppState {
         jobsTotal: 0,
         hasNextJobsPage: false,
         jobsStatusFilter: null,
+        jobsSearchQuery: "",
         selectedJobId: null,
         selectedJobDetails: null,
         isLoadingJobDetails: false,

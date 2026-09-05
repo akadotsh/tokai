@@ -1,5 +1,5 @@
 import { SyntaxStyle } from "@opentui/core";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   queueJobStatuses,
   type QueueJobStatus,
@@ -46,6 +46,7 @@ function formatJobData(data: unknown) {
 }
 
 export function Jobs() {
+  const [jobSearchInput, setJobSearchInput] = useState("");
   const [isStatusFilterOpen, setIsStatusFilterOpen] = useState(false);
   const [isQueueOptionsOpen, setIsQueueOptionsOpen] = useState(false);
   const [isQueueInfoOpen, setIsQueueInfoOpen] = useState(false);
@@ -69,6 +70,7 @@ export function Jobs() {
       jobsTotal,
       hasNextJobsPage,
       jobsStatusFilter,
+      jobsSearchQuery,
       pollingIntervalMs,
       isLoadingJobs,
       jobsMessage,
@@ -94,9 +96,19 @@ export function Jobs() {
       showPreviousJobsPage,
       showNextJobsPage,
       filterJobsByStatus,
+      searchJobs,
       openJobDetails,
     },
   } = useTokai();
+
+  useEffect(() => {
+    const query = jobSearchInput.trim();
+
+    if (query === jobsSearchQuery || isLoadingJobs) return;
+
+    const timeout = setTimeout(() => void searchJobs(query), 300);
+    return () => clearTimeout(timeout);
+  }, [isLoadingJobs, jobSearchInput, jobsSearchQuery]);
 
   if (!selectedQueue) return null;
 
@@ -208,7 +220,8 @@ export function Jobs() {
             gap={1}
           >
             <text fg="#F3F6FF">
-              {selectedQueue.name} · {jobsTotal} jobs
+              {selectedQueue.name} · {jobsTotal}{" "}
+              {jobsSearchQuery ? "matches" : "jobs"}
             </text>
             <box
               width={3}
@@ -530,12 +543,60 @@ export function Jobs() {
         </box>
       </box>
 
+      <box
+        width="80%"
+        height={3}
+        alignSelf="center"
+        flexDirection="row"
+        gap={1}
+      >
+        <box
+          height={3}
+          minWidth={0}
+          flexGrow={1}
+          border
+          borderColor="#3B82F6"
+          paddingLeft={1}
+          paddingRight={1}
+        >
+          <input
+            value={jobSearchInput}
+            placeholder="Search jobs by ID or name..."
+            placeholderColor="#59677F"
+            textColor="#F3F6FF"
+            onInput={setJobSearchInput}
+            onSubmit={() => void searchJobs(jobSearchInput)}
+          />
+        </box>
+        {isLoadingJobs ? <text fg="#FACC15">Searching...</text> : null}
+        {jobSearchInput || jobsSearchQuery ? (
+          <box
+            width={8}
+            height={3}
+            backgroundColor="#253552"
+            alignItems="center"
+            justifyContent="center"
+            onMouseDown={() => {
+              if (isLoadingJobs) return;
+              setJobSearchInput("");
+              void searchJobs("");
+            }}
+          >
+            <text fg={isLoadingJobs ? "#59677F" : "#C7D2E9"}>Clear</text>
+          </box>
+        ) : null}
+      </box>
+
       {isLoadingJobs && jobs.length === 0 ? (
         <box flexGrow={1} alignItems="center" justifyContent="center">
           <text fg="#FACC15">◌ Loading jobs...</text>
         </box>
       ) : jobs.length === 0 ? (
-        <text fg="#8290AA">No jobs found on this page.</text>
+        <text fg="#8290AA">
+          {jobsSearchQuery
+            ? `No jobs match "${jobsSearchQuery}".`
+            : "No jobs found on this page."}
+        </text>
       ) : (
         <scrollbox
           width="80%"

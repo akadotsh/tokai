@@ -44,6 +44,7 @@ export type QueueJobsPage = {
   page: number;
   pageSize: number;
   status: QueueJobStatus | null;
+  searchQuery: string;
   total: number;
   hasNextPage: boolean;
 };
@@ -224,6 +225,7 @@ class RedisConnection {
     page: number,
     pageSize: number,
     status: QueueJobStatus | null = null,
+    searchQuery = "",
   ) {
     if (!this.connection) {
       throw new Error("Connect to Redis before fetching jobs.");
@@ -242,12 +244,67 @@ class RedisConnection {
       ? [status]
       : [...queueJobStatuses];
     const counts = await queue.getJobCounts(...statuses);
-    const total = statuses.reduce(
+    const unfilteredTotal = statuses.reduce(
       (sum, currentStatus) => sum + (counts[currentStatus] ?? 0),
       0,
     );
     const pageStart = (page - 1) * pageSize;
     const pageEnd = pageStart + pageSize;
+    const query = searchQuery.trim();
+    const normalizedQuery = query.toLowerCase();
+
+    if (normalizedQuery) {
+      const jobs: QueueJobSummary[] = [];
+      let total = 0;
+      const batchSize = 250;
+
+      for (const currentStatus of statuses) {
+        const statusCount = counts[currentStatus] ?? 0;
+
+        for (let start = 0; start < statusCount; start += batchSize) {
+          const batch = await queue.getJobs(
+            [currentStatus],
+            start,
+            Math.min(start + batchSize, statusCount) - 1,
+            true,
+          );
+
+          for (const job of batch) {
+            const id = job.id ?? "(no id)";
+
+            if (
+              !id.toLowerCase().includes(normalizedQuery) &&
+              !job.name.toLowerCase().includes(normalizedQuery)
+            ) {
+              continue;
+            }
+
+            if (total >= pageStart && total < pageEnd) {
+              jobs.push({
+                id,
+                name: job.name,
+                status: currentStatus,
+                timestamp: job.timestamp,
+                data: job.data,
+              });
+            }
+
+            total += 1;
+          }
+        }
+      }
+
+      return {
+        jobs,
+        page,
+        pageSize,
+        status,
+        searchQuery: query,
+        total,
+        hasNextPage: pageEnd < total,
+      } satisfies QueueJobsPage;
+    }
+
     let statusStart = 0;
     const jobsByStatus = await Promise.all(
       statuses.map(async (currentStatus) => {
@@ -276,8 +333,9 @@ class RedisConnection {
       page,
       pageSize,
       status,
-      total,
-      hasNextPage: pageEnd < total,
+      searchQuery: query,
+      total: unfilteredTotal,
+      hasNextPage: pageEnd < unfilteredTotal,
     } satisfies QueueJobsPage;
   }
 
