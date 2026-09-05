@@ -24,6 +24,7 @@ export const queueJobStatuses = [
 ] as const satisfies readonly JobType[];
 
 export type QueueJobStatus = (typeof queueJobStatuses)[number];
+export type RetryableJobState = "failed" | "completed";
 
 export type JobCounts = QueueRef & {
   meta: QueueMeta;
@@ -273,6 +274,38 @@ class RedisConnection {
     }
   }
 
+  async retryQueueJob(queueRef: QueueRef, jobId: string) {
+    if (!this.connection) {
+      throw new Error("Connect to Redis before retrying a job.");
+    }
+
+    const queue = new Queue(queueRef.name, {
+      connection: this.connection.duplicate(),
+      prefix: queueRef.prefix,
+      skipMetasUpdate: true,
+    });
+
+    try {
+      const job = await queue.getJob(jobId);
+
+      if (!job) {
+        throw new Error(`Job "${jobId}" was not found.`);
+      }
+
+      const state = await job.getState();
+
+      if (state !== "failed" && state !== "completed") {
+        throw new Error(
+          `Job "${jobId}" cannot be retried while it is ${state}.`,
+        );
+      }
+
+      await job.retry(state);
+    } finally {
+      await queue.close();
+    }
+  }
+
   async getQueueJobDetails(queueRef: QueueRef, jobId: string) {
     if (!this.connection) {
       throw new Error("Connect to Redis before fetching job details.");
@@ -380,6 +413,24 @@ class RedisConnection {
 
     try {
       await queue.drain(true);
+    } finally {
+      await queue.close();
+    }
+  }
+
+  async retryJobs(queueRef: QueueRef, state: RetryableJobState) {
+    if (!this.connection) {
+      throw new Error("Connect to Redis before retrying jobs.");
+    }
+
+    const queue = new Queue(queueRef.name, {
+      connection: this.connection.duplicate(),
+      prefix: queueRef.prefix,
+      skipMetasUpdate: true,
+    });
+
+    try {
+      await queue.retryJobs({ state });
     } finally {
       await queue.close();
     }

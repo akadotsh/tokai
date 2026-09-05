@@ -5,6 +5,7 @@ import type {
   QueueJobsPage,
   QueueJobSummary,
   QueueRef,
+  RetryableJobState,
 } from "../server/index";
 
 export type AppState = {
@@ -20,6 +21,7 @@ export type AppState = {
   jobsMessage: string;
   isLoadingJobs: boolean;
   deletingJobId: string | null;
+  retryingJobId: string | null;
   selectedJobId: string | null;
   selectedJobDetails: QueueJobDetails | null;
   isLoadingJobDetails: boolean;
@@ -29,6 +31,7 @@ export type AppState = {
   newJobData: string;
   isAddingJob: boolean;
   isDrainingQueue: boolean;
+  isRetryingJobs: boolean;
   isRateLimitingQueue: boolean;
   isObliteratingQueue: boolean;
   message: string;
@@ -65,6 +68,14 @@ export type AppAction =
   | { type: "jobDeleteStarted"; jobId: string }
   | { type: "jobDeleted"; jobId: string }
   | { type: "jobDeleteFailed"; jobId: string; message: string }
+  | { type: "jobRetryStarted"; jobId: string }
+  | {
+      type: "jobRetried";
+      queue: QueueRef;
+      jobId: string;
+      result: QueueJobsPage;
+    }
+  | { type: "jobRetryFailed"; jobId: string; message: string }
   | { type: "jobDetailsLoading"; jobId: string }
   | { type: "jobDetailsLoaded"; jobId: string; details: QueueJobDetails }
   | { type: "jobDetailsFailed"; jobId: string; message: string }
@@ -79,6 +90,14 @@ export type AppAction =
   | { type: "queueDrainStarted" }
   | { type: "queueDrained"; queue: QueueRef; result: QueueJobsPage }
   | { type: "queueDrainFailed"; message: string }
+  | { type: "jobsRetryStarted" }
+  | {
+      type: "jobsRetried";
+      queue: QueueRef;
+      state: RetryableJobState;
+      result: QueueJobsPage;
+    }
+  | { type: "jobsRetryFailed"; message: string }
   | { type: "queueRateLimitStarted" }
   | { type: "queueRateLimited"; queue: QueueRef; durationMs: number }
   | { type: "queueRateLimitFailed"; message: string }
@@ -100,6 +119,7 @@ export function createInitialState(isConnected: boolean): AppState {
     jobsMessage: "",
     isLoadingJobs: false,
     deletingJobId: null,
+    retryingJobId: null,
     selectedJobId: null,
     selectedJobDetails: null,
     isLoadingJobDetails: false,
@@ -109,6 +129,7 @@ export function createInitialState(isConnected: boolean): AppState {
     newJobData: "{}",
     isAddingJob: false,
     isDrainingQueue: false,
+    isRetryingJobs: false,
     isRateLimitingQueue: false,
     isObliteratingQueue: false,
     message: "",
@@ -222,6 +243,7 @@ export function reducer(state: AppState, action: AppAction): AppState {
         jobsStatusFilter: null,
         jobsMessage: "",
         isLoadingJobs: false,
+        retryingJobId: null,
         selectedJobId: null,
         selectedJobDetails: null,
         isLoadingJobDetails: false,
@@ -229,6 +251,7 @@ export function reducer(state: AppState, action: AppAction): AppState {
         isAddJobScreenOpen: false,
         newJobName: "",
         newJobData: "{}",
+        isRetryingJobs: false,
         message: `Queue "${action.queue.name}" is no longer available.`,
       };
     case "showQueues":
@@ -243,6 +266,7 @@ export function reducer(state: AppState, action: AppAction): AppState {
         jobsMessage: "",
         isLoadingJobs: false,
         deletingJobId: null,
+        retryingJobId: null,
         selectedJobId: null,
         selectedJobDetails: null,
         isLoadingJobDetails: false,
@@ -252,6 +276,7 @@ export function reducer(state: AppState, action: AppAction): AppState {
         newJobData: "{}",
         isAddingJob: false,
         isDrainingQueue: false,
+        isRetryingJobs: false,
         isRateLimitingQueue: false,
         isObliteratingQueue: false,
       };
@@ -274,6 +299,31 @@ export function reducer(state: AppState, action: AppAction): AppState {
       return {
         ...state,
         deletingJobId: null,
+        jobsMessage: action.message,
+      };
+    case "jobRetryStarted":
+      return { ...state, retryingJobId: action.jobId, jobsMessage: "" };
+    case "jobRetried":
+      if (
+        !isSameQueue(state.selectedQueue, action.queue) ||
+        state.retryingJobId !== action.jobId
+      ) {
+        return state;
+      }
+      return {
+        ...state,
+        jobs: action.result.jobs,
+        jobsPage: action.result.page,
+        jobsTotal: action.result.total,
+        hasNextJobsPage: action.result.hasNextPage,
+        retryingJobId: null,
+        jobsMessage: `Retried job "${action.jobId}".`,
+      };
+    case "jobRetryFailed":
+      if (state.retryingJobId !== action.jobId) return state;
+      return {
+        ...state,
+        retryingJobId: null,
         jobsMessage: action.message,
       };
     case "jobDetailsLoading":
@@ -364,6 +414,25 @@ export function reducer(state: AppState, action: AppAction): AppState {
         isDrainingQueue: false,
         jobsMessage: action.message,
       };
+    case "jobsRetryStarted":
+      return { ...state, isRetryingJobs: true, jobsMessage: "" };
+    case "jobsRetried":
+      if (!isSameQueue(state.selectedQueue, action.queue)) return state;
+      return {
+        ...state,
+        jobs: action.result.jobs,
+        jobsPage: action.result.page,
+        jobsTotal: action.result.total,
+        hasNextJobsPage: action.result.hasNextPage,
+        isRetryingJobs: false,
+        jobsMessage: `Retried ${action.state} jobs in queue "${action.queue.name}".`,
+      };
+    case "jobsRetryFailed":
+      return {
+        ...state,
+        isRetryingJobs: false,
+        jobsMessage: action.message,
+      };
     case "queueRateLimitStarted":
       return { ...state, isRateLimitingQueue: true, jobsMessage: "" };
     case "queueRateLimited":
@@ -397,6 +466,8 @@ export function reducer(state: AppState, action: AppAction): AppState {
         selectedJobDetails: null,
         isLoadingJobDetails: false,
         jobDetailsMessage: "",
+        retryingJobId: null,
+        isRetryingJobs: false,
         isObliteratingQueue: false,
         message: `Obliterated queue "${action.queue.name}".`,
       };

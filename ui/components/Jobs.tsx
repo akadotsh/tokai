@@ -57,6 +57,7 @@ export function Jobs() {
   const [rateLimitDuration, setRateLimitDuration] = useState("");
   const [rateLimitError, setRateLimitError] = useState("");
   const [isDrainConfirmationOpen, setIsDrainConfirmationOpen] = useState(false);
+  const [isRetryConfirmationOpen, setIsRetryConfirmationOpen] = useState(false);
   const [isObliterateConfirmationOpen, setIsObliterateConfirmationOpen] =
     useState(false);
   const {
@@ -72,7 +73,9 @@ export function Jobs() {
       isLoadingJobs,
       jobsMessage,
       deletingJobId,
+      retryingJobId,
       isDrainingQueue,
+      isRetryingJobs,
       isRateLimitingQueue,
       isObliteratingQueue,
     },
@@ -80,8 +83,10 @@ export function Jobs() {
       showQueues,
       setPollingInterval,
       deleteJob,
+      retryJob,
       openAddJob,
       drainQueue,
+      retryJobs,
       rateLimitQueue,
       obliterateQueue,
       showPreviousJobsPage,
@@ -145,6 +150,13 @@ export function Jobs() {
 
     await drainQueue();
     setIsDrainConfirmationOpen(false);
+  };
+
+  const confirmRetryFailedJobs = async () => {
+    if (isRetryingJobs) return;
+
+    await retryJobs("failed");
+    setIsRetryConfirmationOpen(false);
   };
 
   const confirmObliterateQueue = async () => {
@@ -426,7 +438,7 @@ export function Jobs() {
                 right={0}
                 zIndex={2_000}
                 width={20}
-                height={7}
+                height={9}
                 border
                 borderColor="#253552"
                 backgroundColor="#000000"
@@ -469,6 +481,19 @@ export function Jobs() {
                   alignItems="flex-start"
                   onMouseDown={() => {
                     setIsQueueOptionsOpen(false);
+                    setIsRetryConfirmationOpen(true);
+                  }}
+                >
+                  <text fg="#C7D2E9">Retry failed jobs</text>
+                </box>
+                <box
+                  width="100%"
+                  height={1}
+                  paddingLeft={1}
+                  paddingRight={1}
+                  alignItems="flex-start"
+                  onMouseDown={() => {
+                    setIsQueueOptionsOpen(false);
                     setIsObliterateConfirmationOpen(true);
                   }}
                 >
@@ -502,6 +527,9 @@ export function Jobs() {
             const json = formatJobData(job.data);
             const jsonHeight = json.split("\n").length;
             const isDeleting = deletingJobId === job.id;
+            const isRetrying = retryingJobId === job.id;
+            const canRetry =
+              job.status === "failed" || job.status === "completed";
 
             return (
               <box
@@ -536,6 +564,22 @@ export function Jobs() {
                     <text fg={statusColors[job.status]}>
                       Status: {job.status}
                     </text>
+                    <box
+                      width={5}
+                      height={3}
+                      border
+                      borderColor={canRetry ? "#2563EB" : "#253552"}
+                      alignItems="center"
+                      justifyContent="center"
+                      onMouseDown={(event) => {
+                        event.stopPropagation();
+                        if (canRetry) void retryJob(job.id);
+                      }}
+                    >
+                      <text fg={canRetry ? "#60A5FA" : "#59677F"}>
+                        {isRetrying ? "◌" : "↻"}
+                      </text>
+                    </box>
                     <box
                       width={14}
                       height={3}
@@ -612,6 +656,7 @@ export function Jobs() {
             jobsMessage.startsWith("Deleted ") ||
             jobsMessage.startsWith("Added ") ||
             jobsMessage.startsWith("Emptied ") ||
+            jobsMessage.startsWith("Retried ") ||
             jobsMessage.startsWith("Rate limited ")
               ? "#4ADE80"
               : "#FB7185"
@@ -633,6 +678,17 @@ export function Jobs() {
         }}
         onCancel={() => setIsRateLimitDialogOpen(false)}
         onConfirm={() => void confirmRateLimitQueue()}
+      />
+
+      <ConfirmationDialog
+        isOpen={isRetryConfirmationOpen}
+        title="Retry failed jobs?"
+        message={`This moves all failed jobs in ${selectedQueue.name} back to waiting.`}
+        confirmLabel="Yes, retry"
+        pendingLabel="Retrying..."
+        isPending={isRetryingJobs}
+        onCancel={() => setIsRetryConfirmationOpen(false)}
+        onConfirm={() => void confirmRetryFailedJobs()}
       />
 
       <ConfirmationDialog

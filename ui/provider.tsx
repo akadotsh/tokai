@@ -9,6 +9,7 @@ import {
   redisConnection,
   type QueueJobStatus,
   type QueueRef,
+  type RetryableJobState,
 } from "../server/index";
 import { createInitialState, reducer, type AppState } from "./reducer";
 
@@ -30,12 +31,14 @@ type TokaiActions = {
   openJobDetails: (jobId: string) => Promise<void>;
   closeJobDetails: () => void;
   deleteJob: (jobId: string) => Promise<void>;
+  retryJob: (jobId: string) => Promise<void>;
   openAddJob: () => void;
   closeAddJob: () => void;
   setNewJobName: (value: string) => void;
   setNewJobData: (value: string) => void;
   addJob: () => Promise<void>;
   drainQueue: () => Promise<void>;
+  retryJobs: (state: RetryableJobState) => Promise<void>;
   rateLimitQueue: (durationMs: number) => Promise<void>;
   obliterateQueue: () => Promise<void>;
 };
@@ -63,10 +66,12 @@ export function TokaiProvider({ children }: PropsWithChildren) {
     jobsStatusFilter,
     isLoadingJobs,
     deletingJobId,
+    retryingJobId,
     newJobName,
     newJobData,
     isAddingJob,
     isDrainingQueue,
+    isRetryingJobs,
     isRateLimitingQueue,
     isObliteratingQueue,
     isConnected,
@@ -76,8 +81,10 @@ export function TokaiProvider({ children }: PropsWithChildren) {
     if (
       !isConnected ||
       deletingJobId ||
+      retryingJobId ||
       isAddingJob ||
       isDrainingQueue ||
+      isRetryingJobs ||
       isObliteratingQueue ||
       isLoadingJobs
     ) {
@@ -135,9 +142,11 @@ export function TokaiProvider({ children }: PropsWithChildren) {
     };
   }, [
     deletingJobId,
+    retryingJobId,
     isAddingJob,
     isConnected,
     isDrainingQueue,
+    isRetryingJobs,
     isLoadingJobs,
     isObliteratingQueue,
     jobsPage,
@@ -237,8 +246,10 @@ export function TokaiProvider({ children }: PropsWithChildren) {
       status === jobsStatusFilter ||
       isLoadingJobs ||
       deletingJobId ||
+      retryingJobId ||
       isAddingJob ||
       isDrainingQueue ||
+      isRetryingJobs ||
       isObliteratingQueue
     ) {
       return;
@@ -253,8 +264,10 @@ export function TokaiProvider({ children }: PropsWithChildren) {
       jobsPage <= 1 ||
       isLoadingJobs ||
       deletingJobId ||
+      retryingJobId ||
       isAddingJob ||
       isDrainingQueue ||
+      isRetryingJobs ||
       isObliteratingQueue
     ) {
       return;
@@ -268,8 +281,10 @@ export function TokaiProvider({ children }: PropsWithChildren) {
       !hasNextJobsPage ||
       isLoadingJobs ||
       deletingJobId ||
+      retryingJobId ||
       isAddingJob ||
       isDrainingQueue ||
+      isRetryingJobs ||
       isObliteratingQueue
     ) {
       return;
@@ -286,7 +301,9 @@ export function TokaiProvider({ children }: PropsWithChildren) {
     if (
       !selectedQueue ||
       deletingJobId ||
+      retryingJobId ||
       isDrainingQueue ||
+      isRetryingJobs ||
       isObliteratingQueue
     ) {
       return;
@@ -312,8 +329,10 @@ export function TokaiProvider({ children }: PropsWithChildren) {
     if (
       !selectedQueue ||
       deletingJobId ||
+      retryingJobId ||
       isAddingJob ||
       isDrainingQueue ||
+      isRetryingJobs ||
       isObliteratingQueue
     ) {
       return;
@@ -334,12 +353,49 @@ export function TokaiProvider({ children }: PropsWithChildren) {
     }
   };
 
+  const retryJob = async (jobId: string) => {
+    if (
+      !selectedQueue ||
+      retryingJobId ||
+      deletingJobId ||
+      isAddingJob ||
+      isDrainingQueue ||
+      isRetryingJobs ||
+      isObliteratingQueue
+    ) {
+      return;
+    }
+
+    const queue = selectedQueue;
+    dispatch({ type: "jobRetryStarted", jobId });
+
+    try {
+      await redisConnection.retryQueueJob(queue, jobId);
+      const result = await redisConnection.getQueueJobs(
+        queue,
+        1,
+        JOBS_PAGE_SIZE,
+        jobsStatusFilter,
+      );
+      dispatch({ type: "jobRetried", queue, jobId, result });
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : "Unknown error";
+      dispatch({
+        type: "jobRetryFailed",
+        jobId,
+        message: `Could not retry job: ${reason}`,
+      });
+    }
+  };
+
   const addJob = async () => {
     if (
       !selectedQueue ||
       isAddingJob ||
       deletingJobId ||
+      retryingJobId ||
       isDrainingQueue ||
+      isRetryingJobs ||
       isObliteratingQueue
     ) {
       return;
@@ -380,7 +436,9 @@ export function TokaiProvider({ children }: PropsWithChildren) {
       !selectedQueue ||
       isObliteratingQueue ||
       isDrainingQueue ||
+      isRetryingJobs ||
       deletingJobId ||
+      retryingJobId ||
       isAddingJob
     ) {
       return;
@@ -406,7 +464,9 @@ export function TokaiProvider({ children }: PropsWithChildren) {
       !selectedQueue ||
       isDrainingQueue ||
       isObliteratingQueue ||
+      isRetryingJobs ||
       deletingJobId ||
+      retryingJobId ||
       isAddingJob
     ) {
       return;
@@ -433,13 +493,50 @@ export function TokaiProvider({ children }: PropsWithChildren) {
     }
   };
 
+  const retryJobs = async (state: RetryableJobState) => {
+    if (
+      !selectedQueue ||
+      isRetryingJobs ||
+      isRateLimitingQueue ||
+      isDrainingQueue ||
+      isObliteratingQueue ||
+      deletingJobId ||
+      retryingJobId ||
+      isAddingJob
+    ) {
+      return;
+    }
+
+    const queue = selectedQueue;
+    dispatch({ type: "jobsRetryStarted" });
+
+    try {
+      await redisConnection.retryJobs(queue, state);
+      const result = await redisConnection.getQueueJobs(
+        queue,
+        1,
+        JOBS_PAGE_SIZE,
+        jobsStatusFilter,
+      );
+      dispatch({ type: "jobsRetried", queue, state, result });
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : "Unknown error";
+      dispatch({
+        type: "jobsRetryFailed",
+        message: `Could not retry ${state} jobs: ${reason}`,
+      });
+    }
+  };
+
   const rateLimitQueue = async (durationMs: number) => {
     if (
       !selectedQueue ||
       isRateLimitingQueue ||
       isDrainingQueue ||
+      isRetryingJobs ||
       isObliteratingQueue ||
       deletingJobId ||
+      retryingJobId ||
       isAddingJob
     ) {
       return;
@@ -475,12 +572,14 @@ export function TokaiProvider({ children }: PropsWithChildren) {
     openJobDetails,
     closeJobDetails: () => dispatch({ type: "jobDetailsClosed" }),
     deleteJob,
+    retryJob,
     openAddJob: () => dispatch({ type: "addJobScreenOpened" }),
     closeAddJob: () => dispatch({ type: "addJobScreenClosed" }),
     setNewJobName: (value) => dispatch({ type: "newJobNameChanged", value }),
     setNewJobData: (value) => dispatch({ type: "newJobDataChanged", value }),
     addJob,
     drainQueue,
+    retryJobs,
     rateLimitQueue,
     obliterateQueue,
   };
