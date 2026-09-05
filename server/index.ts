@@ -435,6 +435,14 @@ class RedisConnection {
     }
   }
 
+  async setQueueConcurrency(queueRef: QueueRef, concurrency: number) {
+    if (!Number.isInteger(concurrency) || concurrency <= 0) {
+      throw new Error("Concurrency must be a positive integer.");
+    }
+
+    await this.getQueue(queueRef).setGlobalConcurrency(concurrency);
+  }
+
   async rateLimitQueue(queueRef: QueueRef, durationMs: number) {
     if (!this.connection) {
       throw new Error("Connect to Redis before rate limiting a queue.");

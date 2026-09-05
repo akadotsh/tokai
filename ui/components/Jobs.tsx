@@ -6,6 +6,7 @@ import {
 } from "../../server/index";
 import { useTokai } from "../provider";
 import { ConfirmationDialog } from "./ConfirmationDialog";
+import { ConcurrencyDialog } from "./ConcurrencyDialog";
 import { JobDetailsModal } from "./JobDetailsModal";
 import { RateLimitDialog } from "./RateLimitDialog";
 
@@ -54,6 +55,9 @@ export function Jobs() {
     useState(false);
   const [pollingIntervalInput, setPollingIntervalInput] = useState("");
   const [pollingIntervalError, setPollingIntervalError] = useState("");
+  const [isConcurrencyDialogOpen, setIsConcurrencyDialogOpen] = useState(false);
+  const [concurrencyInput, setConcurrencyInput] = useState("");
+  const [concurrencyError, setConcurrencyError] = useState("");
   const [isRateLimitDialogOpen, setIsRateLimitDialogOpen] = useState(false);
   const [rateLimitDuration, setRateLimitDuration] = useState("");
   const [rateLimitError, setRateLimitError] = useState("");
@@ -79,6 +83,7 @@ export function Jobs() {
       isDrainingQueue,
       isRetryingJobs,
       changingQueueStatus,
+      isSettingQueueConcurrency,
       isRateLimitingQueue,
       isObliteratingQueue,
     },
@@ -91,6 +96,7 @@ export function Jobs() {
       drainQueue,
       retryJobs,
       setQueuePaused,
+      setQueueConcurrency,
       rateLimitQueue,
       obliterateQueue,
       showPreviousJobsPage,
@@ -158,6 +164,21 @@ export function Jobs() {
     setRateLimitError("");
     await rateLimitQueue(durationMs);
     setIsRateLimitDialogOpen(false);
+  };
+
+  const confirmQueueConcurrency = async () => {
+    if (isSettingQueueConcurrency) return;
+
+    const concurrency = Number(concurrencyInput);
+
+    if (!Number.isInteger(concurrency) || concurrency <= 0) {
+      setConcurrencyError("Enter a positive whole number.");
+      return;
+    }
+
+    setConcurrencyError("");
+    await setQueueConcurrency(concurrency);
+    setIsConcurrencyDialogOpen(false);
   };
 
   const confirmDrainQueue = async () => {
@@ -454,7 +475,7 @@ export function Jobs() {
                 right={0}
                 zIndex={2_000}
                 width={20}
-                height={11}
+                height={13}
                 border
                 borderColor="#253552"
                 backgroundColor="#000000"
@@ -497,6 +518,25 @@ export function Jobs() {
                   }}
                 >
                   <text fg="#C7D2E9">Set rate limit</text>
+                </box>
+                <box
+                  width="100%"
+                  height={1}
+                  paddingLeft={1}
+                  paddingRight={1}
+                  alignItems="flex-start"
+                  onMouseDown={() => {
+                    setIsQueueOptionsOpen(false);
+                    setConcurrencyInput(
+                      selectedQueueInfo?.meta.concurrency === undefined
+                        ? ""
+                        : String(selectedQueueInfo.meta.concurrency),
+                    );
+                    setConcurrencyError("");
+                    setIsConcurrencyDialogOpen(true);
+                  }}
+                >
+                  <text fg="#C7D2E9">Set concurrency</text>
                 </box>
                 <box
                   width="100%"
@@ -745,6 +785,7 @@ export function Jobs() {
             jobsMessage.startsWith("Retried ") ||
             jobsMessage.startsWith("Paused ") ||
             jobsMessage.startsWith("Resumed ") ||
+            jobsMessage.startsWith("Set concurrency ") ||
             jobsMessage.startsWith("Rate limited ")
               ? "#4ADE80"
               : "#FB7185"
@@ -766,6 +807,20 @@ export function Jobs() {
         }}
         onCancel={() => setIsRateLimitDialogOpen(false)}
         onConfirm={() => void confirmRateLimitQueue()}
+      />
+
+      <ConcurrencyDialog
+        isOpen={isConcurrencyDialogOpen}
+        queueName={selectedQueue.name}
+        concurrency={concurrencyInput}
+        error={concurrencyError}
+        isPending={isSettingQueueConcurrency}
+        onConcurrencyChange={(value) => {
+          setConcurrencyInput(value);
+          setConcurrencyError("");
+        }}
+        onCancel={() => setIsConcurrencyDialogOpen(false)}
+        onConfirm={() => void confirmQueueConcurrency()}
       />
 
       <ConfirmationDialog

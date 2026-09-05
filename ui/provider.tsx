@@ -42,6 +42,7 @@ type TokaiActions = {
   drainQueue: () => Promise<void>;
   retryJobs: (state: RetryableJobState) => Promise<void>;
   setQueuePaused: (queue: QueueRef, paused: boolean) => Promise<void>;
+  setQueueConcurrency: (concurrency: number) => Promise<void>;
   rateLimitQueue: (durationMs: number) => Promise<void>;
   obliterateQueue: () => Promise<void>;
 };
@@ -77,6 +78,7 @@ export function TokaiProvider({ children }: PropsWithChildren) {
     isDrainingQueue,
     isRetryingJobs,
     changingQueueStatus,
+    isSettingQueueConcurrency,
     isRateLimitingQueue,
     isObliteratingQueue,
     isConnected,
@@ -91,6 +93,7 @@ export function TokaiProvider({ children }: PropsWithChildren) {
       isDrainingQueue ||
       isRetryingJobs ||
       changingQueueStatus ||
+      isSettingQueueConcurrency ||
       isObliteratingQueue ||
       isLoadingJobs
     ) {
@@ -155,6 +158,7 @@ export function TokaiProvider({ children }: PropsWithChildren) {
     isDrainingQueue,
     isRetryingJobs,
     changingQueueStatus,
+    isSettingQueueConcurrency,
     isLoadingJobs,
     isObliteratingQueue,
     jobsPage,
@@ -652,6 +656,46 @@ export function TokaiProvider({ children }: PropsWithChildren) {
     }
   };
 
+  const setQueueConcurrency = async (concurrency: number) => {
+    if (
+      !selectedQueue ||
+      isSettingQueueConcurrency ||
+      isRateLimitingQueue ||
+      isDrainingQueue ||
+      isRetryingJobs ||
+      changingQueueStatus ||
+      isObliteratingQueue ||
+      deletingJobId ||
+      retryingJobId ||
+      isAddingJob
+    ) {
+      return;
+    }
+
+    const queue = selectedQueue;
+    dispatch({ type: "queueConcurrencySetStarted" });
+
+    try {
+      await redisConnection.setQueueConcurrency(queue, concurrency);
+      const [meta, counts] = await Promise.all([
+        redisConnection.getQueueMeta(queue),
+        redisConnection.getQueueJobCounts(queue),
+      ]);
+      dispatch({
+        type: "queueConcurrencySet",
+        queue,
+        concurrency,
+        queueInfo: { ...queue, meta, counts },
+      });
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : "Unknown error";
+      dispatch({
+        type: "queueConcurrencySetFailed",
+        message: `Could not set queue concurrency: ${reason}`,
+      });
+    }
+  };
+
   const actions: TokaiActions = {
     setRedisUrl: (value) => dispatch({ type: "redisUrlChanged", value }),
     setPollingInterval: (value) =>
@@ -677,6 +721,7 @@ export function TokaiProvider({ children }: PropsWithChildren) {
     drainQueue,
     retryJobs,
     setQueuePaused,
+    setQueueConcurrency,
     rateLimitQueue,
     obliterateQueue,
   };

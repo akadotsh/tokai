@@ -34,6 +34,7 @@ export type AppState = {
   isDrainingQueue: boolean;
   isRetryingJobs: boolean;
   changingQueueStatus: QueueRef | null;
+  isSettingQueueConcurrency: boolean;
   isRateLimitingQueue: boolean;
   isObliteratingQueue: boolean;
   message: string;
@@ -110,6 +111,14 @@ export type AppAction =
       queueInfo: JobCounts;
     }
   | { type: "queueStatusChangeFailed"; queue: QueueRef; message: string }
+  | { type: "queueConcurrencySetStarted" }
+  | {
+      type: "queueConcurrencySet";
+      queue: QueueRef;
+      concurrency: number;
+      queueInfo: JobCounts;
+    }
+  | { type: "queueConcurrencySetFailed"; message: string }
   | { type: "queueRateLimitStarted" }
   | { type: "queueRateLimited"; queue: QueueRef; durationMs: number }
   | { type: "queueRateLimitFailed"; message: string }
@@ -144,6 +153,7 @@ export function createInitialState(isConnected: boolean): AppState {
     isDrainingQueue: false,
     isRetryingJobs: false,
     changingQueueStatus: null,
+    isSettingQueueConcurrency: false,
     isRateLimitingQueue: false,
     isObliteratingQueue: false,
     message: "",
@@ -281,6 +291,7 @@ export function reducer(state: AppState, action: AppAction): AppState {
         newJobData: "{}",
         isRetryingJobs: false,
         changingQueueStatus: null,
+        isSettingQueueConcurrency: false,
         message: `Queue "${action.queue.name}" is no longer available.`,
       };
     case "showQueues":
@@ -308,6 +319,7 @@ export function reducer(state: AppState, action: AppAction): AppState {
         isDrainingQueue: false,
         isRetryingJobs: false,
         changingQueueStatus: null,
+        isSettingQueueConcurrency: false,
         isRateLimitingQueue: false,
         isObliteratingQueue: false,
       };
@@ -491,6 +503,24 @@ export function reducer(state: AppState, action: AppAction): AppState {
         jobsMessage: action.message,
         message: action.message,
       };
+    case "queueConcurrencySetStarted":
+      return { ...state, isSettingQueueConcurrency: true, jobsMessage: "" };
+    case "queueConcurrencySet":
+      if (!isSameQueue(state.selectedQueue, action.queue)) return state;
+      return {
+        ...state,
+        queues: state.queues.map((queue) =>
+          isSameQueue(queue, action.queue) ? action.queueInfo : queue,
+        ),
+        isSettingQueueConcurrency: false,
+        jobsMessage: `Set concurrency for queue "${action.queue.name}" to ${action.concurrency}.`,
+      };
+    case "queueConcurrencySetFailed":
+      return {
+        ...state,
+        isSettingQueueConcurrency: false,
+        jobsMessage: action.message,
+      };
     case "queueRateLimitStarted":
       return { ...state, isRateLimitingQueue: true, jobsMessage: "" };
     case "queueRateLimited":
@@ -528,6 +558,7 @@ export function reducer(state: AppState, action: AppAction): AppState {
         retryingJobId: null,
         isRetryingJobs: false,
         changingQueueStatus: null,
+        isSettingQueueConcurrency: false,
         isObliteratingQueue: false,
         message: `Obliterated queue "${action.queue.name}".`,
       };
