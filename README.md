@@ -9,7 +9,7 @@ Tokai is a terminal interface for inspecting and managing BullMQ queues in Redis
 - View and set global queue concurrency.
 - Search jobs by ID or name and inspect job details and logs.
 - Add, delete, and retry jobs.
-- Pause, resume, rate limit, empty, or obliterate queues.
+- Pause, resume, rate limit, clean, empty, or obliterate queues.
 
 ## Built with
 
