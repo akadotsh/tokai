@@ -26,7 +26,7 @@ const statusFilterOptions: Array<{
 }> = [
   { label: "all", value: null },
   ...queueJobStatuses.map((status) => ({
-    label: status,
+    label: status.replaceAll("-", " "),
     value: status,
   })),
 ];
